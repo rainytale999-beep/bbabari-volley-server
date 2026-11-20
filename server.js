@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
-  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok rooms=' + rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 서버 v' + SERVER_VER); } // 진단용
+  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('ok rooms=' + rooms.size + ' (경기 중 ' + [...rooms.values()].filter(r => r.S && !r.over).length + ') | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 서버 v' + SERVER_VER); } // 진단용
   const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
