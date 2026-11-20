@@ -6,6 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
+const SERVER_VER = '0.15'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -16,12 +17,12 @@ const server = http.createServer((req, res) => {
   if (u === '/') u = '/index.html';
   if (u === '/rooms') { // 열린 방 목록(방 찾기)
     const list = [];
-    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
+    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, lock: !!room.pw, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
   if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok rooms=' + rooms.size); }
-  const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 실행 중 (방 ' + rooms.size + '개)'); };
+  const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
   if ((u !== '/index.html' && !u.startsWith('/assets/')) || !file.startsWith(ROOT + path.sep)) { res.writeHead(404); return res.end('not found'); }
@@ -60,12 +61,13 @@ function onHello(ws, m) {
     if (rooms.size >= MAX_ROOMS) return send(ws, { t: 'err', m: '서버에 방이 가득 찼어요. 잠시 뒤에 다시 시도해 주세요.' });
     let code; do { code = R.newCode(); } while (rooms.has(code));
     room = { code, cfg: R.mkRoom(3), clients: new Map(), S: null, meta: null, acc: 0, stepN: 0, evOut: [], over: false, overAt: 0 };
-    room.cfg.title = cleanTitle(m.title);
+    room.cfg.title = cleanTitle(m.title); room.pw = String(m.pw == null ? '' : m.pw).slice(0, 12); room.cfg.lock = !!room.pw; // 비밀번호는 서버만 갖고 있고, 방 정보에는 잠김 여부만 싣는다
     room.cfg.owner = ws.id; R.layoutRoom(room.cfg, [{ id: ws.id, name, ch: R.randCh([]) }]);
     rooms.set(code, room);
   } else {
     room = rooms.get(String(m.code || '').trim().toUpperCase());
     if (!room) return send(ws, { t: 'err', m: '그런 방이 없어요. 코드를 다시 확인해 주세요.' });
+    if (room.pw && String(m.pw == null ? '' : m.pw) !== room.pw) return send(ws, { t: 'needpw', code: room.code, bad: m.pw != null && m.pw !== '' });
     const idx = R.joinSlot(room.cfg);
     if (idx < 0) return send(ws, { t: 'full' });
     const jch = room.S ? room.S.players[idx].ch : R.randCh(R.fixedCh(room.cfg, R.teamOf(room.cfg, idx), idx)); // 경기 중 난입이면 그 자리 캐릭터를 이어받고, 로비면 팀에서 안 쓰는 캐릭터로
@@ -74,7 +76,9 @@ function onHello(ws, m) {
     bc(room, { t: 'toast', m: name + ' 님이 들어왔어요' });
   }
   ws.room = room; ws.name = name; room.clients.set(ws.id, ws);
-  send(ws, { t: 'you', id: ws.id, code: room.code });
+  ws.bin = m.bin === 1; // 작은 이진 묶음으로 받을 수 있는 화면인지
+  ws.hz = m.hz === 60 ? 60 : 30; // 화면 상태를 받는 빈도. 새 화면은 초당 60번, 예전 화면은 30번
+  send(ws, { t: 'you', id: ws.id, code: room.code, hz: ws.hz });
   bc(room, pub(room));
   if (room.S) { send(ws, { t: 'start', meta: room.meta, you: slotOf(room, ws.id) }); if (room.over) send(ws, { t: 'result', stats: room.S.players.map(p => p.stats) }); }
 }
@@ -96,7 +100,7 @@ function onMsg(ws, m) {
   if (m.t === 'hello') return onHello(ws, m);
   const room = ws.room; if (!room) return;
   const owner = room.cfg.owner === ws.id;
-  if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0 }); return; }
+  if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
   if (m.t === 'in') { ws.inp = (m.k | 0) & 127; ws.latch |= ws.inp; }
   else if (m.t === 'ch' || m.t === 'move' || m.t === 'set') {
     if (room.S) return;
@@ -121,10 +125,11 @@ wss.on('connection', ws => {
   ws.on('error', () => { });
 });
 
-/* 경기 계산 루프: 방마다 초당 60스텝, 2스텝마다 상태 전송 */
-let last = now();
+/* 경기 계산 루프: 방마다 초당 60스텝. 상태 전송은 접속자마다 초당 60번 또는 30번 */
+let last = now(), gapMax = 0, gapCur = 0, gapAt = last;
 setInterval(() => {
-  const t = now(), dt = Math.min(0.1, (t - last) / 1000); last = t;
+  const t = now(), gap = t - last, dt = Math.min(0.1, gap / 1000); last = t;
+  if (gap > gapCur) gapCur = gap; if (t - gapAt > 2000) { gapMax = gapCur; gapCur = 0; gapAt = t; }
   for (const room of rooms.values()) {
     const S = room.S; if (!S) continue;
     room.acc += dt; let guard = 0;
@@ -132,8 +137,13 @@ setInterval(() => {
       room.acc -= DT;
       for (const ws of room.clients.values()) { const i = slotOf(room, ws.id); if (i >= 0 && S.players[i] && !S.players[i].bot) S.players[i].inp = ws.inp | ws.latch; ws.latch = 0; }
       try { Core.step(S); } catch (e) { console.error('step error', e); toLobby(room); break; }
-      for (const e of S.ev) room.evOut.push(e); S.ev.length = 0;
-      if ((++room.stepN & 1) === 0) { bc(room, { t: 's', s: R.pack(S, room.evOut) }); room.evOut = []; }
+      const evs = S.ev.slice(); for (const e of evs) room.evOut.push(e); S.ev.length = 0;
+      const even = (++room.stepN & 1) === 0, out = {}; let pf = null, ps = null; // 같은 내용은 한 번만 만들어 여러 명에게 보낸다
+      for (const ws of room.clients.values()) { if (ws.readyState !== 1) continue; const fastC = ws.hz === 60; if (!fastC && !even) continue;
+        const key = (fastC ? 'f' : 's') + (ws.bin ? 'b' : 'j');
+        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin ? Buffer.from(R.enc(p)) : JSON.stringify({ t: 's', s: p }); }
+        ws.send(out[key]); }
+      if (even) room.evOut = [];
       if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }
     }
     if (room.acc > DT * 6) room.acc = 0;

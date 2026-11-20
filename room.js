@@ -70,5 +70,42 @@ function pack(S, evs) {
     it: S.items.map(i => [i.id, i.type, r(i.x), r(i.y), r(i.z), f1(i.t)]), pl: S.peels.map(q => [r(q.x), r(q.z)]), ev: evs };
 }
 
-const RoomLib = { teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
+/* 작은 이진 묶음: 숫자를 글자로 적지 않고 1~3바이트로 담는다(작은 정수 1바이트, 그 밖의 정수·소수 한두 자리 3바이트).
+   내용물 구조를 몰라도 되는 범용 방식이라 pack 이 바뀌어도 그대로 쓴다. */
+const TE = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null, TD = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
+function enc(v) {
+  let buf = new Uint8Array(2048), dv = new DataView(buf.buffer), n = 0;
+  const need = k => { if (n + k > buf.length) { const b2 = new Uint8Array(Math.max(buf.length * 2, n + k)); b2.set(buf); buf = b2; dv = new DataView(buf.buffer); } };
+  const i16 = (tag, x) => { need(3); buf[n++] = tag; dv.setInt16(n, x, true); n += 2; };
+  const w = x => {
+    if (typeof x === 'number') {
+      if (Number.isInteger(x)) { if (x >= 0 && x < 128) { need(1); buf[n++] = x; } else if (x < 0 && x >= -32) { need(1); buf[n++] = 0x80 + (-x - 1); } else if (x >= -32768 && x < 32768) i16(0xA0, x); else { need(9); buf[n++] = 0xA4; dv.setFloat64(n, x, true); n += 8; } }
+      else { const a = Math.round(x * 10), b = Math.round(x * 100); if (Math.abs(x * 10 - a) < 1e-6 && a >= -32768 && a < 32768) i16(0xA2, a); else if (Math.abs(x * 100 - b) < 1e-6 && b >= -32768 && b < 32768) i16(0xA3, b); else if (x === x && Math.abs(x) < 1e30) { need(9); buf[n++] = 0xA4; dv.setFloat64(n, x, true); n += 8; } else { need(1); buf[n++] = 0xA5; } }
+    } else if (x === null || x === undefined) { need(1); buf[n++] = 0xA5; }
+    else if (x === true || x === false) { need(1); buf[n++] = x ? 0xA6 : 0xA7; }
+    else if (typeof x === 'string') { const s = TE.encode(x); need(3 + s.length); buf[n++] = 0xB0; dv.setUint16(n, s.length, true); n += 2; buf.set(s, n); n += s.length; }
+    else if (Array.isArray(x)) { if (x.length < 32) { need(1); buf[n++] = 0xC0 + x.length; } else { need(3); buf[n++] = 0xE0; dv.setUint16(n, x.length, true); n += 2; } for (const q of x) w(q); }
+    else { const ks = Object.keys(x); need(2); buf[n++] = 0xE1; buf[n++] = ks.length; for (const k of ks) { const s = TE.encode(k); need(1 + s.length); buf[n++] = s.length; buf.set(s, n); n += s.length; w(x[k]); } }
+  };
+  w(v); return buf.subarray(0, n);
+}
+function dec(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let n = 0;
+  const r = () => { const t = buf[n++];
+    if (t < 0x80) return t; if (t < 0xA0) return -(t - 0x80) - 1;
+    if (t === 0xA0) { const v = dv.getInt16(n, true); n += 2; return v; }
+    if (t === 0xA2) { const v = dv.getInt16(n, true) / 10; n += 2; return v; }
+    if (t === 0xA3) { const v = dv.getInt16(n, true) / 100; n += 2; return v; }
+    if (t === 0xA4) { const v = dv.getFloat64(n, true); n += 8; return v; }
+    if (t === 0xA5) return null; if (t === 0xA6) return true; if (t === 0xA7) return false;
+    if (t === 0xB0) { const l = dv.getUint16(n, true); n += 2; const s = TD.decode(buf.subarray(n, n + l)); n += l; return s; }
+    if (t >= 0xC0 && t < 0xE0) { const a = new Array(t - 0xC0); for (let i = 0; i < a.length; i++) a[i] = r(); return a; }
+    if (t === 0xE0) { const l = dv.getUint16(n, true); n += 2; const a = new Array(l); for (let i = 0; i < l; i++) a[i] = r(); return a; }
+    if (t === 0xE1) { const c = buf[n++], o = {}; for (let i = 0; i < c; i++) { const l = buf[n++], k = TD.decode(buf.subarray(n, n + l)); n += l; o[k] = r(); } return o; }
+    throw new Error('dec');
+  };
+  return r();
+}
+
+const RoomLib = { enc, dec, teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
 if (typeof module !== 'undefined' && module.exports && RC !== (typeof Core === 'undefined' ? null : Core)) module.exports = RoomLib;
