@@ -1,0 +1,9 @@
+{
+  "name": "bbabari-volley-server",
+  "version": "0.7.0",
+  "private": true,
+  "description": "빱알이 배구 게임 서버",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}
