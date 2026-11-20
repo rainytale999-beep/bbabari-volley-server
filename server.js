@@ -16,15 +16,17 @@ const server = http.createServer((req, res) => {
   if (u === '/') u = '/index.html';
   if (u === '/rooms') { // 열린 방 목록(방 찾기)
     const list = [];
-    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
+    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
   if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok rooms=' + rooms.size); }
+  const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 실행 중 (방 ' + rooms.size + '개)'); };
+  if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
   if ((u !== '/index.html' && !u.startsWith('/assets/')) || !file.startsWith(ROOT + path.sep)) { res.writeHead(404); return res.end('not found'); }
   fs.readFile(file, (err, buf) => {
-    if (err) { if (u === '/index.html') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('빱알이 배구 게임 서버 실행 중 (방 ' + rooms.size + '개)'); } res.writeHead(404); return res.end('not found'); }
+    if (err) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': u === '/index.html' || u === '/assets/manifest.js' ? 'no-cache' : 'public, max-age=2592000' }); // 그림·소리는 30일 저장(주소 뒤 ?v= 가 바뀌면 새로 받는다)
     res.end(buf);
   });
@@ -38,6 +40,7 @@ function send(ws, m) { if (ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function bc(room, m) { const s = JSON.stringify(m); for (const ws of room.clients.values()) if (ws.readyState === 1) ws.send(s); }
 function pub(room) { return { t: 'room', room: room.cfg, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }; }
 function slotOf(room, id) { return room.cfg.slots.findIndex(s => s.kind === 'human' && s.id === id); }
+function cleanTitle(v) { return String(v == null ? '' : v).replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 20) || '빱찌의 지구침공!!'; }
 function cleanName(v) { return String(v == null ? '' : v).replace(/[<>&"'\u0000-\u001f]/g, '').trim().slice(0, 10) || '손님'; }
 
 function startMatch(room) {
@@ -57,6 +60,7 @@ function onHello(ws, m) {
     if (rooms.size >= MAX_ROOMS) return send(ws, { t: 'err', m: '서버에 방이 가득 찼어요. 잠시 뒤에 다시 시도해 주세요.' });
     let code; do { code = R.newCode(); } while (rooms.has(code));
     room = { code, cfg: R.mkRoom(3), clients: new Map(), S: null, meta: null, acc: 0, stepN: 0, evOut: [], over: false, overAt: 0 };
+    room.cfg.title = cleanTitle(m.title);
     room.cfg.owner = ws.id; R.layoutRoom(room.cfg, [{ id: ws.id, name, ch: R.randCh([]) }]);
     rooms.set(code, room);
   } else {
