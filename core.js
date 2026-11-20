@@ -108,7 +108,7 @@ function newGame(cfg) {
   const S = { n, tick: 0, time: 0, phase: 'serve', phaseT: 0, stage: st.id, env: { g: st.g, ceil: st.ceil || 0, sand: st.id === 'beach', windy: !!st.windy, slip: !!st.slip, fest: !!st.fest },
     wind: 0, score: [0, 0], target: cfg.target || 7, diff: cfg.diff || 'normal', ctrl: CTRLS[cfg.ctrl] ? cfg.ctrl : 'normal', itemsOn: cfg.items !== false,
     serveTeam: Math.random() < 0.5 ? 0 : 1, serveIdx: [0, 0], server: 0, pointTeam: -1,
-    ball: { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rot: 0, lastTeam: -1, lastP: -1, touches: 0, power: false, sup: null, supTeam: -1, cap: false, held: true, teamCd: 0, float: 0, home: 0, fuse: 0, serial: 0, chain: 0, nice: 0, quick: false },
+    ball: { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rot: 0, lastTeam: -1, lastP: -1, touches: 0, noP: -1, power: false, sup: null, supTeam: -1, cap: false, held: true, teamCd: 0, float: 0, home: 0, fuse: 0, serial: 0, chain: 0, nice: 0, quick: false },
     decoys: [], ufo: null, players: [], items: [], peels: [], ice: [0, 0], itemT: rnd(6, 10) * (st.fest ? 0.4 : 1), itemId: 1,
     freezeT: 0, stopT: 0, slowT: 0, slowN: 0, cut: null, ev: [], evId: 1, teamAI: [{ serial: -1, chaser: -1 }, { serial: -1, chaser: -1 }], winner: -1, rallyHits: 0, pred: null };
   for (let i = 0; i < n * 2; i++) S.players.push(mkPlayer(i, cfg.slots[i], n));
@@ -126,11 +126,12 @@ function startServe(S) {
   const team = S.serveTeam;
   S.server = team * S.n + (S.serveIdx[team] % S.n);
   for (const p of S.players) {
-    for (const k in p.st) p.st[k] = 0; p.act = 'idle'; p.actT = 0; p.chg = 0; p.fell = false; p.bufA = 0; p.jumpHold = false; p.bounce = 0; p.sky = false; p.ai.serveAt = rnd(1.5, 2.3);
+    for (const k in p.st) p.st[k] = 0; p.act = 'idle'; p.actT = 0; p.chg = 0; p.fell = false; p.bufA = 0; p.jumpHold = false; p.bounce = 0; p.sky = false; p.atSrv = false; p.ai.serveAt = rnd(1.5, 2.3);
     if (p.ko) { p.ko = false; p.hp = Math.max(p.hp, 55); } p.hp = Math.min(100, p.hp + 8);
   }
+  if (!S.tick) { const sp = S.players[S.server]; sp.x = netD(team, SRV); sp.z = ZD / 2; sp.atSrv = true; } // 경기 첫 서브
   const b = S.ball;
-  b.vx = b.vy = b.vz = 0; b.lastTeam = -1; b.lastP = -1; b.touches = 0; b.power = false; b.sup = null; b.supTeam = -1; b.cap = false; b.held = true; b.float = 0; b.home = 0; b.fuse = 0; b.teamCd = 0; b.chain = 0; b.nice = 0; b.quick = false; b.serial++;
+  b.vx = b.vy = b.vz = 0; b.lastTeam = -1; b.lastP = -1; b.noP = -1; b.touches = 0; b.power = false; b.sup = null; b.supTeam = -1; b.cap = false; b.held = true; b.float = 0; b.home = 0; b.fuse = 0; b.teamCd = 0; b.chain = 0; b.nice = 0; b.quick = false; b.serial++;
   S.decoys = []; S.ufo = null; S.ice[0] = S.ice[1] = 0; S.items.length = 0;
   S.wind = S.env.windy ? Math.round(rnd(-1, 1) * 230) : 0;
   ev(S, 'ready', NETX, 300, ZD / 2, team);
@@ -229,6 +230,11 @@ function hurt(S, p, d) {
     ev(S, 'ko', p.x, p.y - 60, p.z, p.i); ev(S, 'txt', p.x, p.y - 170, p.z, '기절!!', 3);
   }
 }
+function noTouch(V, p) { // 파티(2:2·3:3): 방금 공을 친 사람은 연달아 못 친다(토스→스파이크, 토스→토스 혼자 하기 금지). 동료가 전부 기절·얼음·잠·김밥 상태일 때만 봐준다
+  const b = V.ball; if (V.n < 2 || b.noP !== p.i || b.lastTeam !== p.team) return false;
+  for (const q of V.players) if (q.i !== p.i && q.team === p.team && !(q.ko || q.st.frozen > 0 || q.st.sleep > 0 || q.st.wrap > 0)) return true;
+  return false;
+}
 function touch(S, p, kind) {
   const b = S.ball;
   if (kind === 'block' || b.lastTeam !== p.team) { b.chain = 0; b.nice = 0; }
@@ -236,7 +242,7 @@ function touch(S, p, kind) {
   b.quick = false;
   if (kind === 'block') { b.lastTeam = p.team; b.touches = 0; }
   else if (b.lastTeam === p.team) b.touches++; else { b.lastTeam = p.team; b.touches = 1; }
-  b.lastP = p.i; b.serial++; b.teamCd = 0.2; p.hitCd = 0.3; p.hitDone = true; S.rallyHits++;
+  b.lastP = p.i; b.noP = kind === 'bump' || kind === 'spike' ? p.i : -1; b.serial++; b.teamCd = 0.2; p.hitCd = 0.3; p.hitDone = true; S.rallyHits++; // 블로킹·몸에 맞은 공은 같은 사람이 이어서 쳐도 된다
   if (b.touches > 3) { ev(S, 'txt', b.x, b.y - 40, b.z, '포 히트! (4번 터치)', 2); point(S, 1 - p.team, -1); return false; }
   return true;
 }
@@ -400,7 +406,7 @@ function instantSuper(S, p) {
   if (c.sup === 'ufo') {
     if (b.cap || b.held || S.ufo) return;
     cutIn(S, p);
-    b.cap = true; b.vx = b.vy = b.vz = 0; b.home = 0; b.lastTeam = p.team; b.lastP = p.i; b.touches = 0; b.power = false; b.serial++;
+    b.cap = true; b.vx = b.vy = b.vz = 0; b.home = 0; b.lastTeam = p.team; b.lastP = p.i; b.noP = -1; b.touches = 0; b.power = false; b.serial++;
     if (b.sup !== 'hot') b.sup = null;
     S.ufo = { team: p.team, by: p.i, st: 0, t: 0, sx: netD(p.team, 560), sy: -90, sz: ZD / 2, x: netD(p.team, 560), y: -90, z: ZD / 2, bx: 0, by2: 0, bz: 0, dur: rnd(1.7, 2.5), w: rnd(3.6, 4.6), ph: rnd(0, 6.28), w2: rnd(2.2, 3.4), ph2: rnd(0, 6.28) };
     ev(S, 'ufo', b.x, b.y, b.z, p.team);
@@ -441,7 +447,7 @@ function explode(S) {
   ev(S, 'boom', b.x, b.y, b.z, side);
   for (const q of S.players) if (q.team === side) { knock(S, q, 1.5, q.x > b.x ? 1 : -1); q.soot = 8; hurt(S, q, 28); }
   ev(S, 'txt', b.x, b.y - 60, b.z, '펑!!', 3);
-  b.sup = null; b.fuse = 0; b.power = false; b.touches = 0; b.serial++;
+  b.sup = null; b.fuse = 0; b.power = false; b.touches = 0; b.noP = -1; b.serial++;
   if (S.phase === 'rally') { b.vy = -940; b.vx = rnd(-170, 170); b.vz = rnd(-90, 90); }
 }
 function trySuper(S, p) {
@@ -453,7 +459,7 @@ function trySuper(S, p) {
 /* ---------- 서브 ---------- */
 function doServe(S, p, power, inp, chg) {
   const b = S.ball, c = CHARS[p.ch], d = dirKeys(p, inp), T = p.team, f = fdir(p);
-  b.held = false; b.lastTeam = T; b.lastP = p.i; b.touches = 0; b.serial++; b.teamCd = 0.3; p.hitCd = 0.4;
+  b.held = false; b.lastTeam = T; b.lastP = p.i; b.noP = p.i; b.touches = 0; b.serial++; b.teamCd = 0.3; p.hitCd = 0.4;
   const dist = d.fwd ? 520 : d.back ? 190 : 350, e = rnd(-1, 1) * (6 - c.tec) * 10, tz = laneZ(p, d, p.z) + rnd(-1, 1) * (6 - c.tec) * 8;
   b.z = p.z;
   if (power) {
@@ -491,16 +497,17 @@ function stepPlayer(S, p) {
     const src = S.players[p.pupBy]; const si = src ? src.inp : 0;
     inp = ((si & 1) << 1) | ((si & 2) >> 1) | (si & (K.U | K.D)) | (p.gnd ? (si & K.S) : 0);
   }
-  const inc = busy(p), reset = S.phase === 'serve' && S.phaseT < 0.9;
   const serving = S.phase === 'serve' && S.server === p.i;
+  if (serving && !p.atSrv) { const hx0 = netD(p.team, SRV); if (Math.abs(p.x - hx0) < 12) p.atSrv = true; else if (S.phaseT > 3.5) { p.x = hx0; p.vx = 0; p.atSrv = true; } }
+  const toSrv = serving && !p.atSrv, inc = busy(p), reset = S.phase === 'serve' && (S.phaseT < 0.9 || toSrv);
   let mx = 0, mz = 0;
-  const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1), ice = S.ice[p.team] > 0;
+  const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1) * (toSrv ? 1.7 : 1), ice = S.ice[p.team] > 0;
   if (reset) { const h = home(S, p); mx = Math.abs(h[0] - p.x) < 10 ? 0 : (h[0] > p.x ? 1 : -1); mz = Math.abs(h[1] - p.z) < 10 ? 0 : (h[1] > p.z ? 1 : -1); inp = 0; }
   else if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
   if (serving && !reset) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
   if (mx && mz) { mx *= 0.7071; mz *= 0.7071; }
   const ck = ctl(S, p);
-  if (!p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D))) { // 깊이 자동 맞춤
+  if (!p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D)) && !noTouch(S, p)) { // 깊이 자동 맞춤
     const b = S.ball, L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) {
       if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z;
@@ -580,7 +587,7 @@ function stepPlayer(S, p) {
   if (p.bufA > 0) p.bufA -= DT;
   if (p.act === 'charge') { // 파워게이지: 누르고 있으면 차고, 떼면 때린다
     let hold = inp & K.S;
-    if (hold && ck.auto && !serving && !p.bot) { // 쉬움: 공이 닿을 거리에 오면 알아서 때린다
+    if (hold && ck.auto && !serving && !p.bot && !noTouch(S, p)) { // 쉬움: 공이 닿을 거리에 오면 알아서 때린다
       const b = S.ball, sc = psc(p), ds = b.held || b.cap ? 9999 : Math.hypot(b.x - p.x - fdir(p) * 16 * sc, b.y - p.y + 80 * sc, (b.z - p.z) * ck.zk);
       if (ds < 94 * sc * ck.reach && !(b.lastTeam === p.team && b.teamCd > 0) && (p.chg >= 0.5 || ds > p.sDist)) { hold = 0; p.chg = Math.min(p.chg, 0.5); } // 자동으로 나간 스파이크는 풀파워·콤보가 되지 않는다
       p.sDist = ds;
@@ -608,11 +615,12 @@ function contacts(S) {
     const ck = ctl(S, p), s = psc(p), f = fdir(p), c = CHARS[p.ch], rm = (c.id === 'jiae' ? 1.22 : 1) * ck.reach;
     const dist = (x, y, z) => Math.hypot(b.x - x, b.y - y, (b.z - z) * ck.zk), bodyD = d3(b.x, b.y, b.z, p.x, p.y - 46 * s, p.z);
     if (!busy(p)) {
-      if (p.act === 'bump' && p.actT <= 0.24 && !p.hitDone && dist(p.x + f * 10 * s, p.y - 56 * s, p.z) < 96 * s * rm) { hitBump(S, p, false); continue; }
-      if (p.act === 'spike' && p.actT <= 0.22 && !p.hitDone && dist(p.x + f * 16 * s, p.y - 80 * s, p.z) < 100 * s * ck.reach) { hitSpike(S, p); continue; }
-      if (p.act === 'super' && p.actT <= 0.42 && !p.hitDone && dist(p.x + f * 12 * s, p.y - 72 * s, p.z) < 128 * s) { hitSuper(S, p); continue; }
+      const dbl = noTouch(S, p), no = () => { p.hitDone = true; if (p.dblS !== b.serial) { p.dblS = b.serial; ev(S, 'txt', p.x, p.y - 150, p.z, '연속 터치!', 0); } };
+      if (p.act === 'bump' && p.actT <= 0.24 && !p.hitDone && dist(p.x + f * 10 * s, p.y - 56 * s, p.z) < 96 * s * rm) { if (dbl) no(); else hitBump(S, p, false); continue; }
+      if (p.act === 'spike' && p.actT <= 0.22 && !p.hitDone && dist(p.x + f * 16 * s, p.y - 80 * s, p.z) < 100 * s * ck.reach) { if (dbl) no(); else hitSpike(S, p); continue; }
+      if (p.act === 'super' && p.actT <= 0.42 && !p.hitDone && dist(p.x + f * 12 * s, p.y - 72 * s, p.z) < 128 * s) { if (dbl) no(); else hitSuper(S, p); continue; }
       if (p.act === 'block' && b.lastTeam !== p.team && dist(p.x + f * 22 * s, p.y - 112 * s, p.z) < (c.id === 'goseum' ? 64 : 50) * s + BR) { hitBlock(S, p); continue; }
-      if (p.act === 'dive' && p.actT < 0.4 && !p.hitDone && dist(p.x + p.diveX * 30, p.y - 26, p.z + p.diveZ * 30) < 74 * s * rm) { hitBump(S, p, true); continue; }
+      if (p.act === 'dive' && p.actT < 0.4 && !p.hitDone && dist(p.x + p.diveX * 30, p.y - 26, p.z + p.diveZ * 30) < 74 * s * rm) { if (dbl) no(); else hitBump(S, p, true); continue; }
     }
     // 몸에 맞기: 상대가 친 공만(우리 팀 공은 통과)
     if (b.lastTeam !== p.team && bodyD < 34 * s + BR) hitBody(S, p);
@@ -689,7 +697,7 @@ function aiTeam(S, team, pr) {
   const dxz = (p, x, z) => Math.hypot(p.x - x, p.z - z);
   let best = null, bestCost = 1e9, bestIt = null;
   if (S.phase === 'rally' && !homing && n < 3) for (const p of mine) {
-    if (!able(p)) continue;
+    if (!able(p) || noTouch(S, p)) continue;
     let it = null;
     if (n >= 2 || (n === 1 && Tm.roll < D.two)) it = intercept(S, p, pr, 'spike');
     if (!it) it = intercept(S, p, pr, 'bump');
@@ -732,7 +740,7 @@ function aiTeam(S, team, pr) {
       let chase = awake && best === p;
       if (awake && human && best !== p && able(p)) {
         const it = intercept(S, p, pr, 'bump');
-        if (it && it.t < 0.26 && dxz(best, bestIt.x, bestIt.z) > 130 && dxz(p, it.x, it.z) < 240) chase = true; // 사람이 끝내 안 움직이면 막판에 뛰어들어 본다(늦어서 자주 놓친다)
+        if (it && it.t < 0.26 && dxz(best, bestIt.x, bestIt.z) > 130 && dxz(p, it.x, it.z) < 240 && !noTouch(S, p)) chase = true; // 사람이 끝내 안 움직이면 막판에 뛰어들어 본다(늦어서 자주 놓친다)
       }
       if (homing) { // 가시공에 쫓기는 중
         if (p === prey) { go(b.x > p.x ? 0 : CW, b.z > p.z ? 0 : ZD, 5); if (ballNear(S, p, 0.9)) { inp &= ~15; inp |= K.A; } }
@@ -890,5 +898,16 @@ function step(S) {
   }
 }
 
-const Core = { CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
+/* ---------- 미리보기(로비의 '필살기 미리보기')용 ---------- */
+function drill(S, i) { // i번 선수가 받아 올린 공이 네트 앞에 떠 있는 상태에서 랠리를 시작한다
+  const p = S.players[i], b = S.ball, T = p.team; useCourt(S.n);
+  S.phase = 'rally'; S.phaseT = 0;
+  p.x = netD(T, 330); p.z = ZD / 2; p.hitCd = 0.25;
+  b.held = false; b.lastTeam = T; b.lastP = i; b.noP = -1; b.touches = 1; b.serial++; b.teamCd = 0;
+  b.x = p.x + fdir(p) * 20; b.y = p.y - 90; b.z = p.z; b.vz = 0;
+  lob(S, b, netD(T, 140), ZD / 2, GY - BR, GY - 560);
+}
+function forceSup(S, i) { const p = S.players[i]; if (p.gauge >= 100 && S.phase === 'rally' && !S.cut && !p.ko) trySuper(S, p); } // 조건을 따지지 않고 지금 필살기를 쓴다
+
+const Core = { drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
 if (typeof module !== 'undefined') module.exports = Core;

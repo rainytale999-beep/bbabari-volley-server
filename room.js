@@ -63,7 +63,7 @@ function pack(S, evs) {
   const r = Math.round, f1 = v => +v.toFixed(1), f2 = v => +v.toFixed(2), b = S.ball, u = S.ufo;
   return { k: S.tick + (S.freezeT > 0 ? 0.5 : 0), ph: S.phase, pt: f2(S.phaseT), sc: S.score, sv: S.server, st: S.serveTeam, po: S.pointTeam, wn: S.winner, w: S.wind, ice: [f1(S.ice[0]), f1(S.ice[1])], rh: S.rallyHits,
     cut: S.cut ? [S.cut.p, f2(S.cut.t)] : 0,
-    b: [r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), f2(b.rot), b.lastTeam, b.touches, (b.power ? 1 : 0) | (b.cap ? 2 : 0) | (b.held ? 4 : 0), b.sup || 0, f1(b.fuse), f1(b.float), f1(b.home)],
+    b: [r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), f2(b.rot), b.lastTeam, b.touches, (b.power ? 1 : 0) | (b.cap ? 2 : 0) | (b.held ? 4 : 0), b.sup || 0, f1(b.fuse), f1(b.float), f1(b.home), b.noP],
     dc: S.decoys.map(d => [r(d.x), r(d.y), r(d.z), f2(d.rot)]),
     u: u ? [r(u.x), r(u.y), r(u.z), u.st, f2(u.t), u.team, f2(u.dur)] : 0,
     p: S.players.map(p => [r(p.x), r(p.y), r(p.z), r(p.vx), r(p.vy), r(p.vz), p.gnd ? 1 : 0, ACTS.indexOf(p.act), f2(p.actT), f2(p.chg), r(p.hp), r(p.gauge), (p.ko ? 1 : 0) | (p.big > 0 ? 2 : 0) | (p.mini > 0 ? 4 : 0) | (p.fast > 0 ? 8 : 0) | (p.soot > 0 ? 16 : 0), r(p.diveX * 9), ...STK.map(k => f1(p.st[k]))]),
