@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.16'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.18'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
-  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok rooms=' + rooms.size); }
+  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok rooms=' + rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 서버 v' + SERVER_VER); } // 진단용
   const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
@@ -127,10 +127,12 @@ wss.on('connection', ws => {
 
 const PK = Object.keys(R.pack(Core.newGame({ stage: 'beach', target: 7, diff: 'normal', items: true, slots: [{ ch: 0, name: 'a', bot: true }, { ch: 1, name: 'b', bot: true }] }), [])); // 화면 상태의 항목 이름(순서 고정)
 /* 경기 계산 루프: 방마다 초당 60스텝. 상태 전송은 접속자마다 초당 60번 또는 30번 */
-let last = now(), gapMax = 0, gapCur = 0, gapAt = last;
-setInterval(() => {
-  const t = now(), gap = t - last, dt = Math.min(0.1, gap / 1000); last = t;
-  if (gap > gapCur) gapCur = gap; if (t - gapAt > 2000) { gapMax = gapCur; gapCur = 0; gapAt = t; }
+let last = now(), gapMax = 0, gapCur = 0, gapAt = last, planned = 0, stallN = 0, stallShown = 0, cpuLast = process.cpuUsage(), cpuAt = last, cpuPct = 0;
+function tick() {
+  const t = now(), gap = t - last, dt = Math.min(0.1, gap / 1000), lateBy = gap - planned; last = t; // lateBy: 깨어나기로 한 시각보다 늦은 정도 = 서버가 밀린 시간
+  if (lateBy > gapCur) gapCur = lateBy; if (lateBy > 40) stallN++;
+  if (t - gapAt > 2000) { gapMax = gapCur; gapCur = 0; gapAt = t; }
+  if (t - cpuAt > 10000) { const u = process.cpuUsage(cpuLast); cpuPct = (u.user + u.system) / 1000 / (t - cpuAt) * 100; cpuLast = process.cpuUsage(); cpuAt = t; stallShown = stallN; stallN = 0; }
   for (const room of rooms.values()) {
     const S = room.S; if (!S) continue;
     room.acc += dt; let guard = 0;
@@ -142,7 +144,7 @@ setInterval(() => {
       const even = (++room.stepN & 1) === 0, out = {}; let pf = null, ps = null; // 같은 내용은 한 번만 만들어 여러 명에게 보낸다
       for (const ws of room.clients.values()) { if (ws.readyState !== 1) continue; const fastC = ws.hz === 60; if (!fastC && !even) continue;
         const key = (fastC ? 'f' : 's') + ws.bin;
-        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin === 2 ? Buffer.from(R.enc(PK.map(k => p[k]))) : ws.bin ? Buffer.from(R.enc(p)) : JSON.stringify({ t: 's', s: p }); }
+        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin === 2 ? R.enc(PK.map(k => p[k])) : ws.bin ? R.enc(p) : JSON.stringify({ t: 's', s: p }); }
         ws.send(out[key]); }
       if (even) room.evOut = [];
       if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }
@@ -150,7 +152,10 @@ setInterval(() => {
     if (room.acc > DT * 6) room.acc = 0;
     if (room.S && room.over && t - room.overAt > 90000) toLobby(room); // 결과 화면에서 1분 30초 지나면 자동으로 로비
   }
-}, 8);
+  let wait = 50; for (const room of rooms.values()) if (room.S) { const w = (DT - room.acc) * 1000; if (w < wait) wait = w; }
+  planned = Math.max(1, Math.ceil(wait)); setTimeout(tick, planned);
+}
+tick();
 setInterval(() => { const t = now(); for (const ws of wss.clients) { ws.cnt = 0; if (t - ws.last > 15000) ws.terminate(); } }, 1000);
 
 server.listen(PORT, () => console.log('빱알이 배구 서버 실행 중 → http://localhost:' + PORT));

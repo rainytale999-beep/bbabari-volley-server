@@ -73,9 +73,10 @@ function pack(S, evs) {
 /* 작은 이진 묶음: 숫자를 글자로 적지 않고 1~3바이트로 담는다(작은 정수 1바이트, 그 밖의 정수·소수 한두 자리 3바이트).
    내용물 구조를 몰라도 되는 범용 방식이라 pack 이 바뀌어도 그대로 쓴다. */
 const TE = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null, TD = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
+let ENC_BUF = new Uint8Array(4096), ENC_DV = new DataView(ENC_BUF.buffer);
 function enc(v) {
-  let buf = new Uint8Array(2048), dv = new DataView(buf.buffer), n = 0;
-  const need = k => { if (n + k > buf.length) { const b2 = new Uint8Array(Math.max(buf.length * 2, n + k)); b2.set(buf); buf = b2; dv = new DataView(buf.buffer); } };
+  let buf = ENC_BUF, dv = ENC_DV, n = 0;
+  const need = k => { if (n + k > buf.length) { const b2 = new Uint8Array(Math.max(buf.length * 2, n + k)); b2.set(buf); buf = ENC_BUF = b2; dv = ENC_DV = new DataView(buf.buffer); } };
   const i16 = (tag, x) => { need(3); buf[n++] = tag; dv.setInt16(n, x, true); n += 2; };
   const w = x => {
     if (typeof x === 'number') {
@@ -87,7 +88,7 @@ function enc(v) {
     else if (Array.isArray(x)) { if (x.length < 32) { need(1); buf[n++] = 0xC0 + x.length; } else { need(3); buf[n++] = 0xE0; dv.setUint16(n, x.length, true); n += 2; } for (const q of x) w(q); }
     else { const ks = Object.keys(x); need(2); buf[n++] = 0xE1; buf[n++] = ks.length; for (const k of ks) { const s = TE.encode(k); need(1 + s.length); buf[n++] = s.length; buf.set(s, n); n += s.length; w(x[k]); } }
   };
-  w(v); return buf.subarray(0, n);
+  w(v); return buf.slice(0, n); // 재사용 버퍼에서 필요한 만큼만 복사해 돌려준다
 }
 function dec(buf) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength); let n = 0;
