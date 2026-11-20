@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.15'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.16'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -76,9 +76,9 @@ function onHello(ws, m) {
     bc(room, { t: 'toast', m: name + ' 님이 들어왔어요' });
   }
   ws.room = room; ws.name = name; room.clients.set(ws.id, ws);
-  ws.bin = m.bin === 1; // 작은 이진 묶음으로 받을 수 있는 화면인지
+  ws.bin = m.bin === 2 ? 2 : m.bin === 1 ? 1 : 0; // 0 글자, 1 이진 묶음, 2 이진 묶음 + 항목 이름 생략
   ws.hz = m.hz === 60 ? 60 : 30; // 화면 상태를 받는 빈도. 새 화면은 초당 60번, 예전 화면은 30번
-  send(ws, { t: 'you', id: ws.id, code: room.code, hz: ws.hz });
+  send(ws, { t: 'you', id: ws.id, code: room.code, hz: ws.hz, pk: ws.bin === 2 ? PK : undefined });
   bc(room, pub(room));
   if (room.S) { send(ws, { t: 'start', meta: room.meta, you: slotOf(room, ws.id) }); if (room.over) send(ws, { t: 'result', stats: room.S.players.map(p => p.stats) }); }
 }
@@ -125,6 +125,7 @@ wss.on('connection', ws => {
   ws.on('error', () => { });
 });
 
+const PK = Object.keys(R.pack(Core.newGame({ stage: 'beach', target: 7, diff: 'normal', items: true, slots: [{ ch: 0, name: 'a', bot: true }, { ch: 1, name: 'b', bot: true }] }), [])); // 화면 상태의 항목 이름(순서 고정)
 /* 경기 계산 루프: 방마다 초당 60스텝. 상태 전송은 접속자마다 초당 60번 또는 30번 */
 let last = now(), gapMax = 0, gapCur = 0, gapAt = last;
 setInterval(() => {
@@ -140,8 +141,8 @@ setInterval(() => {
       const evs = S.ev.slice(); for (const e of evs) room.evOut.push(e); S.ev.length = 0;
       const even = (++room.stepN & 1) === 0, out = {}; let pf = null, ps = null; // 같은 내용은 한 번만 만들어 여러 명에게 보낸다
       for (const ws of room.clients.values()) { if (ws.readyState !== 1) continue; const fastC = ws.hz === 60; if (!fastC && !even) continue;
-        const key = (fastC ? 'f' : 's') + (ws.bin ? 'b' : 'j');
-        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin ? Buffer.from(R.enc(p)) : JSON.stringify({ t: 's', s: p }); }
+        const key = (fastC ? 'f' : 's') + ws.bin;
+        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin === 2 ? Buffer.from(R.enc(PK.map(k => p[k]))) : ws.bin ? Buffer.from(R.enc(p)) : JSON.stringify({ t: 's', s: p }); }
         ws.send(out[key]); }
       if (even) room.evOut = [];
       if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }
