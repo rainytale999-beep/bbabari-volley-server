@@ -64,7 +64,7 @@ const DIFFS = {
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const CTRLS = { // 조작 난이도
   easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.15, auto: true, buf: 0.22 },
-  normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.68, reach: 1, assist: 1, perf: 0.075, auto: false, buf: 0.16 },
+  normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.1, auto: false, buf: 0.18 }, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
   pro: { name: '수동', desc: '도움 없음. 앞뒤 위치와 타이밍을 전부 직접 맞춘다(버튼 안내도 꺼짐)', zk: 1, reach: 1, assist: 0, perf: 0.075, auto: false, buf: 0 },
 };
 function supHow(ch) { return CHARS[ch].type === 'instant' ? 'D를 누르면 바로 발동' : '점프해서 공 가까이에서 D'; }
