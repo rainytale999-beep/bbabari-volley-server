@@ -3,7 +3,7 @@ const RC = (typeof module !== 'undefined' && module.exports && typeof Core === '
 const ACTS = ['idle', 'bump', 'spike', 'super', 'block', 'dive', 'charge'], STK = ['down', 'stun', 'hop', 'sleep', 'frozen', 'wrap', 'puppet', 'float', 'sad', 'flat'];
 
 function randCh(used) { const all = RC.CHARS.map((c, i) => i), free = all.filter(i => !used.includes(i)), pool = free.length ? free : all; return pool[Math.floor(Math.random() * pool.length)]; }
-function mkRoom(n) { return { n, stage: 'random', target: 7, diff: 'normal', ctrl: 'normal', items: true, owner: '', slots: [] }; }
+function mkRoom(n) { return { n, stage: 'random', target: 10, diff: 'normal', ctrl: 'normal', items: true, owner: '', slots: [] }; }
 function layoutRoom(room, humans) { // 사람을 양 팀에 번갈아 앉히고 나머지는 PC
   const n = room.n, slots = new Array(n * 2).fill(null);
   humans.forEach((h, i) => { const team = i % 2, k = i >> 1; if (k < n) slots[team * n + k] = { kind: 'human', id: h.id, name: h.name, ch: h.ch }; });
@@ -48,7 +48,7 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
     if (k === 'stage') { if (v !== 'random' && !RC.STAGES.some(s => s.id === v)) return 'bad'; room.stage = v; return null; }
     if (k === 'diff') { if (!RC.DIFFS[v]) return 'bad'; room.diff = v; return null; }
     if (k === 'ctrl') { if (!RC.CTRLS[v]) return 'bad'; room.ctrl = v; return null; }
-    if (k === 'target') { if (![5, 7, 11, 15].includes(v)) return 'bad'; room.target = v; return null; }
+    if (k === 'target') { if (![10, 14, 20].includes(v)) return 'bad'; room.target = v; return null; }
     if (k === 'items') { room.items = !!v; return null; }
   }
   return 'bad';
@@ -61,7 +61,7 @@ function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; fo
 /* 경기 상태 → 전송용 스냅샷 */
 function pack(S, evs) {
   const r = Math.round, f1 = v => +v.toFixed(1), f2 = v => +v.toFixed(2), b = S.ball, u = S.ufo;
-  return { k: S.tick + (S.freezeT > 0 ? 0.5 : 0), ph: S.phase, pt: f2(S.phaseT), sc: S.score, sv: S.server, st: S.serveTeam, po: S.pointTeam, wn: S.winner, w: S.wind, ice: [f1(S.ice[0]), f1(S.ice[1])], rh: S.rallyHits,
+  return { k: S.tick + (S.freezeT > 0 ? 0.5 : 0), sw: S.swap | 0, ph: S.phase, pt: f2(S.phaseT), sc: S.score, sv: S.server, st: S.serveTeam, po: S.pointTeam, wn: S.winner, w: S.wind, ice: [f1(S.ice[0]), f1(S.ice[1])], rh: S.rallyHits,
     cut: S.cut ? [S.cut.p, f2(S.cut.t)] : 0,
     b: [r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), f2(b.rot), b.lastTeam, b.touches, (b.power ? 1 : 0) | (b.cap ? 2 : 0) | (b.held ? 4 : 0) | (b.out ? 8 : 0), b.sup || 0, f1(b.fuse), f1(b.float), f1(b.home), b.noP],
     dc: S.decoys.map(d => [r(d.x), r(d.y), r(d.z), f2(d.rot)]),
