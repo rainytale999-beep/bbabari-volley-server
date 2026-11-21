@@ -329,6 +329,10 @@ function hitBump(S, p, viaDive) {
   else if (perfect) { S.stopT = 0.045; ev(S, 'hit', b.x, b.y, b.z, 1, p.i); ev(S, 'bump', b.x, b.y, b.z, 3); ev(S, 'txt', p.x, p.y - 150, p.z, wasOpp ? '나이스 리시브!' : '나이스 토스!', 1); }
   else ev(S, 'bump', b.x, b.y, b.z, 0);
 }
+function spikeAim(p, inp) { // 방향키로 고른 스파이크 목표(오차 없이). 화면의 조준 표시에도 쓴다
+  const d = dirKeys(p, inp), dist = d.fwd ? 525 : d.back ? 185 : 350;
+  return { x: clamp(oppD(p.team, dist), 50, CW - 50), z: cz(laneZ(p, d, p.z)) };
+}
 function spikeTarget(S, p, d) {
   const T = p.team, c = CHARS[p.ch], e = rnd(-1, 1) * (20 + (6 - c.tec) * 12), ez = rnd(-1, 1) * (12 + (6 - c.tec) * 8);
   const dist = d.fwd ? 525 : d.back ? 185 : 350;
@@ -505,9 +509,18 @@ function stepPlayer(S, p) {
   if (reset) { const h = home(S, p); mx = Math.abs(h[0] - p.x) < 10 ? 0 : (h[0] > p.x ? 1 : -1); mz = Math.abs(h[1] - p.z) < 10 ? 0 : (h[1] > p.z ? 1 : -1); inp = 0; }
   else if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
   if (serving && !reset) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
-  if (mx && mz) { mx *= 0.7071; mz *= 0.7071; }
   const ck = ctl(S, p);
-  if (!p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D)) && !noTouch(S, p)) { // 깊이 자동 맞춤
+  // 스파이크 조준: S로 뛰어 힘을 모으는(또는 휘두르는) 동안에는 공을 칠 자리로 저절로 날아가고, 방향키는 때릴 곳(상대 코트)만 고른다
+  const aimAir = !p.bot && ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc && !reset && s.puppet <= 0 && s.wrap <= 0 && s.float <= 0;
+  if (aimAir) {
+    mx = mz = 0; const b = S.ball;
+    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < 320 * XS) {
+      const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
+      mx = clamp((tx - p.x) / 30, -1, 1); mz = clamp((tz - p.z) / 24, -1, 1);
+    }
+  }
+  if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
+  if (!aimAir && !p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D)) && !noTouch(S, p)) { // 깊이 자동 맞춤
     const b = S.ball, L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) {
       if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z;
@@ -519,7 +532,7 @@ function stepPlayer(S, p) {
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 190 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
     else { const fr = (ice ? 600 : S.env.slip ? 1300 : 2600) * DT, v = Math.hypot(p.vx, p.vz); if (v > fr) { p.vx *= (v - fr) / v; p.vz *= (v - fr) / v; } else p.vx = p.vz = 0; }
   } else {
-    const k = (reset ? 1.6 : 1) * (s.float > 0 ? 0.3 : 1);
+    const k = (reset ? 1.6 : 1) * (s.float > 0 ? 0.3 : 1) * (aimAir ? 1.3 : 1);
     const acc = (p.gnd ? (ice ? 620 : (inc ? 1700 : (S.env.slip ? 1500 : 4600))) : (inc ? 0 : 2200)) * DT;
     p.vx += clamp(mx * spd * k - p.vx, -acc, acc); p.vz += clamp(mz * spd * k - p.vz, -acc, acc);
   }
@@ -909,5 +922,5 @@ function drill(S, i) { // i번 선수가 받아 올린 공이 네트 앞에 떠 
 }
 function forceSup(S, i) { const p = S.players[i]; if (p.gauge >= 100 && S.phase === 'rally' && !S.cut && !p.ko) trySuper(S, p); } // 조건을 따지지 않고 지금 필살기를 쓴다
 
-const Core = { drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
+const Core = { spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
 if (typeof module !== 'undefined') module.exports = Core;
