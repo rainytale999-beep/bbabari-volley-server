@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.37'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.52'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -101,7 +101,7 @@ function onMsg(ws, m) {
   const room = ws.room; if (!room) return;
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
-  if (m.t === 'in') { ws.inp = (m.k | 0) & 127; ws.latch |= ws.inp; }
+  if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; }
   else if (m.t === 'ch' || m.t === 'move' || m.t === 'set') {
     if (room.S) return;
     const err = R.roomApply(room.cfg, ws.id, m, owner);
