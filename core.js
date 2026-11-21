@@ -5,6 +5,8 @@ const W = 1280, H = 720, GY = 620, NETH = 178, NETW = 14, BR = 26, NETTOP = GY -
 // 코트 크기는 팀 인원에 따라 달라진다(사람이 많을수록 넓어서 빈 곳이 생긴다). CW = 코트 전체 길이, ZD = 깊이, XS = 1:1 대비 길이 배율
 const COURTS = { 1: [1280, 340], 2: [1500, 410], 3: [1720, 470] };
 const SRV = 695; // 서브 자리: 끝선 뒤(코트 밖). 네트로부터의 거리(1:1 기준)
+const MOVE_K = 0.92; // 걷기·달리기 속도 배율(v0.32에서 8% 느리게)
+const DIVE_LEN = 150; // 슬라이딩 리시브 최대 거리(1:1 기준). 세네 ×1.25, 눈밭·빙판 ×1.3
 let CW = 1280, NETX = 640, ZD = 340, XS = 1, VW = 1460; // VW = 화면에 보이는 폭(코트 + 양쪽 끝선 뒤 여유)
 function useCourt(n) { const c = COURTS[n] || COURTS[1]; CW = c[0]; NETX = CW / 2; ZD = c[1]; XS = CW / 1280; VW = CW + 180 * XS; }
 const GB = 1400, GP = 2300, DT = 1 / 60;
@@ -58,8 +60,8 @@ const ITEMS = [
 ];
 const DIFFS = {
   easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5 },
-  normal: { name: '보통',   react: 0.27, err: 24, block: 0.4,  dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3 },
-  hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.8,  dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12 },
+  normal: { name: '보통',   react: 0.27, err: 24, block: 0.2,  dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3 },
+  hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.38,  dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12 },
 };
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const CTRLS = { // 조작 난이도
@@ -83,7 +85,7 @@ function cool(p) { return CHARS[p.ch].id === 'iseu' ? 0.5 : 1; }
 function gutMul(p) { return (1.3 - CHARS[p.ch].gut * 0.1) * cool(p); }
 function pSpeed(S, p) {
   const c = CHARS[p.ch], s = p.st;
-  return (262 + c.spd * 32) * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * (p.hp < 30 ? 0.86 : 1);
+  return (262 + c.spd * 32) * MOVE_K * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * (p.hp < 30 ? 0.86 : 1);
 }
 function pGrav(S, p) { return GP * S.env.g * (CHARS[p.ch].id === 'dalgareum' ? 0.84 : 1); }
 function jumpV(p) { return (800 + CHARS[p.ch].jmp * 38) * (p.hp < 30 ? 0.94 : 1); }
@@ -242,7 +244,7 @@ function touch(S, p, kind) {
   b.quick = false;
   if (kind === 'block') { b.lastTeam = p.team; b.touches = 0; }
   else if (b.lastTeam === p.team) b.touches++; else { b.lastTeam = p.team; b.touches = 1; }
-  b.lastP = p.i; b.noP = kind === 'bump' || kind === 'spike' ? p.i : -1; b.serial++; b.teamCd = 0.2; p.hitCd = 0.3; p.hitDone = true; S.rallyHits++; // 블로킹·몸에 맞은 공은 같은 사람이 이어서 쳐도 된다
+  b.full = false; b.lastP = p.i; b.noP = kind === 'bump' || kind === 'spike' ? p.i : -1; b.serial++; b.teamCd = 0.2; p.hitCd = 0.3; p.hitDone = true; S.rallyHits++; // 블로킹·몸에 맞은 공은 같은 사람이 이어서 쳐도 된다
   if (b.touches > 3) { ev(S, 'txt', b.x, b.y - 40, b.z, '포 히트! (4번 터치)', 2); point(S, 1 - p.team, -1); return false; }
   return true;
 }
@@ -350,7 +352,7 @@ function hitSpike(S, p) {
   else if (air && quick) { tag = '속공!'; mul = 1.1; bonus = 6; }
   else if (air && direct) { tag = '다이렉트!'; mul = 1.04; bonus = 6; }
   else if (back) { tag = '백어택!'; mul = 1.05; bonus = 7; }
-  const tg = spikeTarget(S, p, d), full = p.pw >= 1.26;
+  const tg = spikeTarget(S, p, d), full = p.pw >= 1.26; b.full = !p.gnd && full;
   const sp = (900 + c.pow * 85) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul;
   b.home = 0;
   drive(S, b, tg.x, tg.z, GY - BR, sp); b.power = !p.gnd && p.pw > 0.9;
@@ -364,10 +366,10 @@ function hitBlock(S, p) {
   const b = S.ball, c = CHARS[p.ch], f = fdir(p);
   if (b.sup && b.sup !== 'hot' && b.supTeam !== p.team && b.sup !== 'bogo') { supReceive(S, p, false); return; }
   const hitter = S.players[b.lastP], hp = hitter ? CHARS[hitter.ch].pow : 3;
-  const wasPower = b.power;
+  const wasPower = b.power, wasFull = b.full;
   if (!touch(S, p, 'block')) return;
   const boss = c.id === 'goseum';
-  if (wasPower && hp - c.pow >= 2 && Math.random() < 0.5 && !boss) {
+  if (wasPower && !boss && ((hp - c.pow >= 2 && Math.random() < 0.5) || (wasFull && Math.random() < 0.4))) { // 파워 차이가 크거나 풀파워면 손을 뚫는다
     b.vx *= 0.45; b.vy = -420; b.power = false; ev(S, 'block', b.x, b.y, b.z, 0); ev(S, 'txt', p.x, p.y - 190, p.z, '블록 아웃!', 2);
   } else {
     b.vx = f * (Math.abs(b.vx) * (boss ? 0.75 : 0.5) + 190); b.vy = wasPower ? (boss ? 380 : 240) : -160; b.vz *= 0.4; b.power = false;
@@ -528,9 +530,11 @@ function stepPlayer(S, p) {
     }
     if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? 0.62 : 0.8) * ck.assist);
   }
-  if (p.act === 'dive') {
+  if (p.act === 'dive') { // 정해진 거리(diveLen)만큼만 미끄러진다
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 190 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
     else { const fr = (ice ? 600 : S.env.slip ? 1300 : 2600) * DT, v = Math.hypot(p.vx, p.vz); if (v > fr) { p.vx *= (v - fr) / v; p.vz *= (v - fr) / v; } else p.vx = p.vz = 0; }
+    const rem = (p.diveLen || 0) - Math.hypot(p.x - p.diveX0, p.z - p.diveZ0), v = Math.hypot(p.vx, p.vz);
+    if (rem <= 0) p.vx = p.vz = 0; else if (v * DT > rem) { p.vx *= rem / DT / v; p.vz *= rem / DT / v; }
   } else {
     const k = (reset ? 1.6 : 1) * (s.float > 0 ? 0.3 : 1) * (aimAir ? 1.3 : 1);
     const acc = (p.gnd ? (ice ? 620 : (inc ? 1700 : (S.env.slip ? 1500 : 4600))) : (inc ? 0 : 2200)) * DT;
@@ -588,7 +592,16 @@ function stepPlayer(S, p) {
     if ((edge & K.X) && p.gauge >= 100 && !serving) trySuper(S, p);
     else if (press & K.A) {
       if (serving) doServe(S, p, false, inp, 0);
-      else if (p.gnd && (mx || mz) && !ballNear(S, p, 1.25)) { const v = Math.hypot(mx, mz); p.act = 'dive'; p.actT = 0; p.hitDone = false; p.diveX = mx / v; p.diveZ = mz / v; p.chg = 0; hurt(S, p, 3); ev(S, 'dive', p.x, GY, p.z); }
+      else if (p.gnd && (mx || mz) && !ballNear(S, p, 1.25)) {
+        const v = Math.hypot(mx, mz), maxD = DIVE_LEN * (c.id === 'sene' ? 1.25 : 1) * (S.env.slip || S.ice[p.team] > 0 ? 1.3 : 1);
+        p.act = 'dive'; p.actT = 0; p.hitDone = false; p.diveX = mx / v; p.diveZ = mz / v; p.diveX0 = p.x; p.diveZ0 = p.z; p.diveLen = maxD; p.chg = 0;
+        const L = S.pred && S.pred.land; // 쉬움·보통: 공이 떨어질 곳으로 저절로 향하고, 그 자리를 지나치지 않는다
+        if (!p.bot && ck.assist > 0 && L && !b.held && !b.cap && sideOf(L.x) === p.team) {
+          const dx = L.x - p.x, dz = L.z - p.z, dd = Math.hypot(dx, dz);
+          if (dd > 1) { p.diveX = dx / dd; p.diveZ = dz / dd; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); }
+        }
+        hurt(S, p, 3); ev(S, 'dive', p.x, GY, p.z);
+      }
       else { p.act = 'bump'; p.actT = 0; p.hitDone = false; p.perfect = pf; p.chg = 0; }
     } else if ((press & K.S) && p.act !== 'charge' && (serving || !p.gnd)) {
       const blk = !serving && Math.abs(p.x - NETX) < 135 && !b.held && !b.cap && b.lastTeam >= 0 && b.lastTeam !== p.team && sideOf(b.x) !== p.team;
@@ -632,7 +645,7 @@ function contacts(S) {
       if (p.act === 'bump' && p.actT <= 0.24 && !p.hitDone && dist(p.x + f * 10 * s, p.y - 56 * s, p.z) < 96 * s * rm) { if (dbl) no(); else hitBump(S, p, false); continue; }
       if (p.act === 'spike' && p.actT <= 0.22 && !p.hitDone && dist(p.x + f * 16 * s, p.y - 80 * s, p.z) < 100 * s * ck.reach) { if (dbl) no(); else hitSpike(S, p); continue; }
       if (p.act === 'super' && p.actT <= 0.42 && !p.hitDone && dist(p.x + f * 12 * s, p.y - 72 * s, p.z) < 128 * s) { if (dbl) no(); else hitSuper(S, p); continue; }
-      if (p.act === 'block' && b.lastTeam !== p.team && dist(p.x + f * 22 * s, p.y - 112 * s, p.z) < (c.id === 'goseum' ? 64 : 50) * s + BR) { hitBlock(S, p); continue; }
+      if (p.act === 'block' && b.lastTeam !== p.team && dist(p.x + f * 22 * s, p.y - 112 * s, p.z) < (c.id === 'goseum' ? 48 : 32) * s + BR) { hitBlock(S, p); continue; }
       if (p.act === 'dive' && p.actT < 0.4 && !p.hitDone && dist(p.x + p.diveX * 30, p.y - 26, p.z + p.diveZ * 30) < 74 * s * rm) { if (dbl) no(); else hitBump(S, p, true); continue; }
     }
     // 몸에 맞기: 상대가 친 공만(우리 팀 공은 통과)
@@ -698,6 +711,7 @@ function intercept(S, p, pr, mode) {
 }
 function aiTeam(S, team, pr) {
   const b = S.ball, D = DIFFS[S.diff], Tm = S.teamAI[team];
+  Tm.bz = Tm.bz == null ? b.z : Tm.bz + (b.z - Tm.bz) * Math.min(1, DT * 3.5); // 블로커가 보는 공 깊이(약 0.3초 늦게 따라감)
   const mine = S.players.filter(p => p.team === team), opp = S.players.filter(p => p.team !== team);
   const n = b.lastTeam === team ? b.touches : 0;
   if (Tm.serial !== b.serial) {
@@ -796,14 +810,14 @@ function aiTeam(S, team, pr) {
               if (hm) { const d = Math.abs(hm.x - NETX); if (d < 125) inp |= fwdK; else if (d > 300) inp |= backK; if (hm.z < p.z - 70) inp |= K.U; else if (hm.z > p.z + 70) inp |= K.D; }
               else { if (Tm.tac < 0.25) inp |= fwdK; else if (Tm.tac > 0.8) inp |= backK; if (Tm.tacZ < 0.2) inp |= K.U; else if (Tm.tacZ > 0.8) inp |= K.D; }
             } else if (n >= 2) { if (Tm.tac < 0.35) inp |= fwdK; else if (Tm.tac > 0.8) inp |= backK; if (Tm.tacZ < 0.33) inp |= K.U; else if (Tm.tacZ > 0.66) inp |= K.D; }
-          } else if (p.gnd && it.t < 0.42 && dd > pSpeed(S, p) * it.t + 36 && dd < 235 && b.y > GY - 300 && Tm.roll < D.dive) {
+          } else if (p.gnd && it.t < 0.42 && dd > pSpeed(S, p) * it.t + 36 && dd < DIVE_LEN + 40 && b.y > GY - 300 && Tm.roll < D.dive) {
             inp &= ~15; inp |= K.A; if (Math.abs(tx - p.x) > 20) inp |= tx > p.x ? K.R : K.L; if (Math.abs(tz - p.z) > 20) inp |= tz > p.z ? K.D : K.U;
           }
         } else go(h[0], h[1], 14);
       } else {
         let hx = h[0], hz = h[1];
         if (p === front && oppAttack && D.block > 0 && Tm.roll < D.block) {
-          hx = netD(team, 58); hz = b.z;
+          hx = netD(team, 58); hz = (Tm.bz != null ? Tm.bz : b.z) + Tm.errZ * 1.8 + (Tm.roll2 - 0.5) * 60; // 공 깊이를 조금 늦게, 오차를 두고 따라간다(코스를 비틀면 피할 수 있게)
           const atk = opp.find(q => !q.gnd && Math.abs(q.x - NETX) < 260 && d3(b.x, b.y, b.z, q.x, q.y - 80, q.z) < 190);
           go(hx, hz, 12);
           if (atk && p.gnd && dxz(p, hx, hz) < 70) { inp &= ~K.S; press(K.S); }
