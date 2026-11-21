@@ -7,7 +7,8 @@ const COURTS = { 1: [1408, 374], 2: [1650, 451], 3: [1892, 517] }; // v0.35: 모
 const SRV = 695; // 서브 자리: 끝선 뒤(코트 밖). 네트로부터의 거리(1:1 기준)
 const SERVE_OUT_P = 0.25; // 게이지를 가득 채운 강서브가 끝선 밖으로 나가 버릴 확률
 const STA = { rest: 1.8, idle: 1.1, run: 1.5, walk: 0.5, serve: 2.5, act: 0.8 }; // act = 동작(점프·스파이크 등) 소모 배율 // 체력 회복(랠리 사이·가만히)과 소모(달리기·걷기) 초당 양, 서브 때 회복량
-const DIRECT_MISS = 0.3; // 다이렉트(상대가 넘긴 공을 바로 스파이크)가 헛스윙이 되는 확률
+const DIRECT_MISS = 0.45;
+const BLK_N = { 1: 1, 2: 0.85, 3: 0.6 }; // 인원별 PC 블로킹 시도 배율(인원마다 네트 앞 상황이 달라 따로 맞춘다) // 다이렉트(상대가 넘긴 공을 바로 스파이크)가 헛스윙이 되는 확률
 const MOVE_K = 1; // 걷기·달리기 속도 배율(v0.32 0.92 → v0.34 다시 1: 체력이 떨어지면 저절로 느려지므로)
 const BALL_K = 0.9; // 스파이크·강서브처럼 곧게 날아가는 공의 속도 배율(v0.34 10% 느리게)
 const DIVE_LEN = 150; // 슬라이딩 리시브 최대 거리(1:1 기준). 세네 ×1.25, 눈밭·빙판 ×1.3
@@ -64,8 +65,8 @@ const ITEMS = [
 ];
 const DIFFS = {
   easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5 },
-  normal: { name: '보통',   react: 0.27, err: 24, block: 0.2,  dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3 },
-  hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.38,  dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12 },
+  normal: { name: '보통',   react: 0.27, err: 24, block: 0.3,  dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3 },
+  hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.5,   dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12 },
 };
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const CTRLS = { // 조작 난이도
@@ -603,7 +604,7 @@ function stepPlayer(S, p) {
   const out = 85 * XS; // 서브하는 선수만 끝선 뒤로 나갈 수 있다. 밖에 있던 선수는 안쪽으로만 움직인다
   if (p.team === 0) { const lo = serving ? -out : Math.min(m, px0); if (p.x < lo) { p.x = lo; p.vx = 0; } if (p.x > NETX - NETW / 2 - m) { p.x = NETX - NETW / 2 - m; p.vx = 0; } }
   else { const hi = serving ? CW + out : Math.max(CW - m, px0); if (p.x > hi) { p.x = hi; p.vx = 0; } if (p.x < NETX + NETW / 2 + m) { p.x = NETX + NETW / 2 + m; p.vx = 0; } }
-  if (slap && p.x !== x0) { p.vx = slap; if (Math.abs(p.x - NETX) < 80) ev(S, 'bonk', p.x, p.y - 60, p.z, '네트에 찰싹!', 3); }
+  if (slap && p.x !== x0) { p.vx = slap; if (Math.abs(p.x - NETX) < 80 * XS) ev(S, 'bonk', p.x, p.y - 60, p.z, '네트에 찰싹!', 3); }
   if (p.z < 14) { p.z = 14; p.vz = 0; } if (p.z > ZD - 14) { p.z = ZD - 14; p.vz = 0; }
   if (p.gnd && !inc && Math.hypot(p.vx, p.vz) > 90) for (const q of S.peels) if (q.t > 0 && Math.hypot(q.x - p.x, q.z - p.z) < 30) {
     q.t = 0; p.st.down = 1.15 * gutMul(p); const v = Math.hypot(p.vx, p.vz); p.vx = p.vx / v * 420; p.vz = p.vz / v * 420; p.vy = -330; p.gnd = false; p.act = 'idle'; p.chg = 0; p.stats.fall++; hurt(S, p, 10); ev(S, 'slip', p.x, GY, p.z, '미끄덩~', 3);
@@ -634,7 +635,7 @@ function stepPlayer(S, p) {
       }
       else { p.act = 'bump'; p.actT = 0; p.hitDone = false; p.perfect = pf; p.chg = 0; }
     } else if ((press & K.S) && p.act !== 'charge' && (serving || !p.gnd)) {
-      const blk = !serving && Math.abs(p.x - NETX) < 135 && !b.held && !b.cap && b.lastTeam >= 0 && b.lastTeam !== p.team && sideOf(b.x) !== p.team;
+      const blk = !serving && Math.abs(p.x - NETX) < 135 * XS && !b.held && !b.cap && b.lastTeam >= 0 && b.lastTeam !== p.team && sideOf(b.x) !== p.team;
       if (blk) { p.act = 'block'; p.actT = 0; p.hitDone = false; }
       else { p.act = 'charge'; p.actT = 0; p.chg = 0; p.chgHold = 0; }
     }
@@ -849,9 +850,9 @@ function aiTeam(S, team, pr) {
         } else go(h[0], h[1], 14);
       } else {
         let hx = h[0], hz = h[1];
-        if (p === front && oppAttack && D.block > 0 && Tm.roll < D.block) {
+        if (p === front && oppAttack && D.block > 0 && Tm.roll < D.block * (BLK_N[S.n] || 1)) {
           hx = netD(team, 58); hz = (Tm.bz != null ? Tm.bz : b.z) + Tm.errZ * 1.8 + (Tm.roll2 - 0.5) * 60; // 공 깊이를 조금 늦게, 오차를 두고 따라간다(코스를 비틀면 피할 수 있게)
-          const atk = opp.find(q => !q.gnd && Math.abs(q.x - NETX) < 260 && d3(b.x, b.y, b.z, q.x, q.y - 80, q.z) < 190);
+          const atk = opp.find(q => !q.gnd && Math.abs(q.x - NETX) < 260 * XS && d3(b.x, b.y, b.z, q.x, q.y - 80, q.z) < 190);
           go(hx, hz, 12);
           if (atk && p.gnd && dxz(p, hx, hz) < 70) { inp &= ~K.S; press(K.S); }
           if (!p.gnd && p.vy < 200 && p.act === 'idle' && d3(b.x, b.y, b.z, p.x, p.y - 110, p.z) < 300) press(K.S);
