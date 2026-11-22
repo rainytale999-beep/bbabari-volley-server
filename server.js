@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.57'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.60'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -101,7 +101,7 @@ function onMsg(ws, m) {
   const room = ws.room; if (!room) return;
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
-  if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; }
+  if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; if (m.q != null) { ws.seq = (m.q | 0) & 255; ws.seqN = 0; } } // q(v0.60): 입력 번호
   else if (m.t === 'ch' || m.t === 'move' || m.t === 'set') {
     if (room.S) return;
     const err = R.roomApply(room.cfg, ws.id, m, owner);
@@ -140,11 +140,12 @@ function tick() {
       room.acc -= DT;
       for (const ws of room.clients.values()) { const i = slotOf(room, ws.id); if (i >= 0 && S.players[i] && !S.players[i].bot) S.players[i].inp = ws.inp | ws.latch; ws.latch = 0; }
       try { Core.step(S); } catch (e) { console.error('step error', e); toLobby(room); break; }
+      const acks = []; for (const ws of room.clients.values()) { const i = slotOf(room, ws.id); if (ws.seq != null) { ws.seqN = Math.min(255, (ws.seqN | 0) + 1); if (i >= 0) acks[i] = [ws.seq, ws.seqN]; } } // v0.60 이 입력으로 몇 번 돌았는지 알려 준다
       const evs = S.ev.slice(); for (const e of evs) room.evOut.push(e); S.ev.length = 0;
       const even = (++room.stepN & 1) === 0, out = {}; let pf = null, ps = null; // 같은 내용은 한 번만 만들어 여러 명에게 보낸다
       for (const ws of room.clients.values()) { if (ws.readyState !== 1) continue; const fastC = ws.hz === 60; if (!fastC && !even) continue;
         const key = (fastC ? 'f' : 's') + ws.bin;
-        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs))) : (ps || (ps = R.pack(S, room.evOut))); out[key] = ws.bin === 2 ? R.enc(PK.map(k => p[k])) : ws.bin ? R.enc(p) : JSON.stringify({ t: 's', s: p }); }
+        if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs, acks))) : (ps || (ps = R.pack(S, room.evOut, acks))); out[key] = ws.bin === 2 ? R.enc(PK.map(k => p[k])) : ws.bin ? R.enc(p) : JSON.stringify({ t: 's', s: p }); }
         ws.send(out[key]); }
       if (even) room.evOut = [];
       if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }

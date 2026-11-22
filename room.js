@@ -60,7 +60,7 @@ function metaOf(room, stage) { return { n: room.n, stage, target: room.target, d
 function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
 /* 경기 상태 → 전송용 스냅샷 */
-function pack(S, evs) {
+function pack(S, evs, acks) { // acks(v0.60): 자리마다 [받은 입력 번호, 그 입력으로 돈 횟수] — 화면이 내 캐릭터를 먼저 계산할 때 맞춰 보는 기준
   const r = Math.round, f1 = v => +v.toFixed(1), f2 = v => +v.toFixed(2), b = S.ball, u = S.ufo;
   return { k: S.tick + (S.freezeT > 0 ? 0.5 : 0), sw: S.swap | 0, ph: S.phase, pt: f2(S.phaseT), sc: S.score, sv: S.server, st: S.serveTeam, po: S.pointTeam, wn: S.winner, w: S.wind, ice: [f1(S.ice[0]), f1(S.ice[1])], rh: S.rallyHits,
     cut: S.cut ? [S.cut.p, f2(S.cut.t), S.cut.vs != null ? S.cut.vs : -1, S.cut.res != null ? S.cut.res : -1] : 0,
@@ -70,6 +70,7 @@ function pack(S, evs) {
     nl: S.netLive ? [S.netLive.team, f1(S.netLive.t), Math.round(S.netLive.dx), S.netLive.mode] : 0, bs: S.basin ? [S.basin.team, f1(S.basin.t)] : 0, eg: +S.env.g.toFixed(2), tf: S.thornF ? [S.thornF.team, ...S.thornF.pts.flat().map(r)] : 0, mm: S.mom ? [r(S.mom.x), r(S.mom.z), S.mom.st, f2(S.mom.t), S.mom.team] : 0,
     sm: S.steams.map(q => [r(q.x), r(q.z), f1(q.t), r(q.r)]), pg: S.pig ? [r(S.pig.x), r(S.pig.y), r(S.pig.z), S.pig.st, S.pig.dir] : 0, pt: S.pots.map(q => [r(q.x), r(q.z), f2(q.t)]),
     p: S.players.map(p => [r(p.x), r(p.y), r(p.z), r(p.vx), r(p.vy), r(p.vz), p.gnd ? 1 : 0, ACTS.indexOf(p.act), f2(p.actT), f2(p.chg), r(p.hp), r(p.gauge), (p.ko ? 1 : 0) | (p.big > 0 ? 2 : 0) | (p.mini > 0 ? 4 : 0) | (p.fast > 0 ? 8 : 0) | (p.soot > 0 ? 16 : 0) | (p.toss ? 32 : 0) | (p.aimOn ? 64 | ((p.aimX + 1) << 7) | ((p.aimZ + 1) << 9) : 0) | (p.supBan ? 2048 : 0) | (p.tis > 0 ? 4096 : 0) | (Math.min(7, p.supN | 0) << 13) | (Math.min(7, p.supCap || 7) << 16) | ((p.item ? RC.ITEMS.findIndex(i => i.id === p.item) + 1 : 0) << 19) | (p.ck > 1 ? 1 << 22 : 0), r(p.diveX * 9), ...STK.map(k => f1(p.st[k]))]),
+    ak: [S.slowT > 0 ? 1 : 0, ...S.players.map((p, i) => p.bot ? 0 : [acks && acks[i] ? acks[i][0] : 0, acks && acks[i] ? acks[i][1] : 255, r((p.ck || 1) * 100), r((p.mom || 0) * 100), f1(p.st.moon || 0), f1(p.st.wet2 || 0)])],
     it: S.items.map(i => [i.id, i.type, r(i.x), r(i.y), r(i.z), f1(i.t)]), pl: S.peels.map(q => [r(q.x), r(q.z)]), ev: evs };
 }
 

@@ -750,6 +750,42 @@ function ballNear(S, p, mul) {
   const ck = ctl(S, p), reach = 96 * s * (CHARS[p.ch].id === 'jiae' ? 1.2 : CHARS[p.ch].id === 'snurse' ? 1.05 : 1) * mul * ck.reach * prsK(S, p);
   return Math.hypot(b.x - p.x - f * 10 * s, b.y - p.y + 56 * s, (b.z - p.z) * ck.zk) < reach; // 2.5D라 깊이를 맞추기 어렵다 → 깊이 차이는 덜 따진다
 }
+/* v0.60 온라인 전용: 내 캐릭터의 이동·점프만 화면에서 먼저 계산한다(stepPlayer 의 이동 부분과 같은 공식. 상태는 바꾸지 않고 p 의 위치·속도만 바꾼다).
+   S = 가장 최근에 받은 서버 상태(+ env, pred), p = 내 캐릭터 사본, inp = 그 틱의 키, edge = 그 틱에 새로 눌린 키 */
+function predMove(S, p, inp, edge) {
+  useCourt(S.n);
+  const s = p.st, inc = busy(p), ice = S.ice[p.team] > 0, ck = ctl(S, p), b = S.ball;
+  let mx = 0, mz = 0;
+  if (!inc) { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
+  if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle') p.act = 'charge'; } }
+  const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !inc;
+  if (aimAir) {
+    mx = mz = 0;
+    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < 320 * XS) {
+      const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
+      mx = clamp((tx - p.x) / 30, -1, 1); mz = clamp((tz - p.z) / 24, -1, 1);
+    }
+  }
+  if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
+  if (!aimAir && ck.assist > 0 && !inc && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
+    const L = S.pred && S.pred.land; let tz = null;
+    if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < 230) tz = L.z; }
+    if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? 0.62 : 0.8) * ck.assist);
+  }
+  const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1);
+  if (S.env.slip) p.mom = p.gnd && (mx || mz) && !inc ? Math.min(1, (p.mom || 0) + DT * 0.8) : Math.max(0, (p.mom || 0) - DT * 1.5);
+  const k = aimAir ? 1.3 : 1, acc = (p.gnd ? (ice ? 620 : (inc ? 1700 : (S.env.slip ? (mx || mz ? 950 : 560) : S.env.wet ? 3000 : 4600))) : (inc ? 0 : 2200)) * DT;
+  p.vx += clamp(mx * spd * k - p.vx, -acc, acc); p.vz += clamp(mz * spd * k - p.vz, -acc, acc);
+  if (!inc && p.gnd && (edge & K.S) && p.act !== 'charge') { p.vy = -jumpV(p); p.gnd = false; p.jumpHold = true; }
+  if (!p.gnd) p.vy += pGrav(S, p) * DT;
+  const px0 = p.x;
+  p.y += p.vy * DT; p.x += p.vx * DT; p.z += p.vz * DT;
+  if (p.y >= GY) { if (!p.gnd) { p.gnd = true; if (p.act === 'charge') p.act = 'idle'; } p.y = GY; p.vy = 0; }
+  const m = 24 * psc(p);
+  if (p.team === 0) { const lo = Math.min(m, px0); if (p.x < lo) { p.x = lo; p.vx = 0; } if (p.x > NETX - NETW / 2 - m) { p.x = NETX - NETW / 2 - m; p.vx = 0; } }
+  else { const hi = Math.max(CW - m, px0); if (p.x > hi) { p.x = hi; p.vx = 0; } if (p.x < NETX + NETW / 2 + m) { p.x = NETX + NETW / 2 + m; p.vx = 0; } }
+  if (p.z < 14) { p.z = 14; p.vz = 0; } if (p.z > ZD - 14) { p.z = ZD - 14; p.vz = 0; }
+}
 function stepPlayer(S, p) {
   const c = CHARS[p.ch], s = p.st;
   const wasFloat = s.float > 0, wasGiant = s.giant > 0;
@@ -1263,5 +1299,5 @@ function drill(S, i) { // i번 선수가 받아 올린 공이 네트 앞에 떠 
 }
 function forceSup(S, i) { const p = S.players[i]; if (p.gauge >= 100 && S.phase === 'rally' && !S.cut && !p.ko) trySuper(S, p); } // 조건을 따지지 않고 지금 필살기를 쓴다
 
-const Core = { SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
+const Core = { predMove, SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
 if (typeof module !== 'undefined') module.exports = Core;
