@@ -3,7 +3,7 @@ const RC = (typeof module !== 'undefined' && module.exports && typeof Core === '
 const ACTS = ['idle', 'bump', 'spike', 'super', 'block', 'dive', 'charge'], STK = ['down', 'stun', 'hop', 'sleep', 'frozen', 'wrap', 'puppet', 'float', 'sad', 'flat', 'giant', 'half', 'boost', 'shrink', 'tub'];
 
 function randCh(used) { const all = RC.CHARS.map((c, i) => i), free = all.filter(i => !used.includes(i)), pool = free.length ? free : all; return pool[Math.floor(Math.random() * pool.length)]; }
-function mkRoom(n) { return { n, stage: 'random', target: 10, diff: 'normal', ctrl: 'normal', items: true, owner: '', slots: [] }; }
+function mkRoom(n) { return { n, stage: 'random', target: 10, diff: 'normal', ctrl: 'normal', items: true, chal: '', owner: '', slots: [] }; }
 function layoutRoom(room, humans) { // 사람을 양 팀에 번갈아 앉히고 나머지는 PC
   const n = room.n, slots = new Array(n * 2).fill(null);
   humans.forEach((h, i) => { const team = i % 2, k = i >> 1; if (k < n) slots[team * n + k] = { kind: 'human', id: h.id, name: h.name, ch: h.ch, rnd: !!h.rnd }; if (h.doped) { slots[team * n + k].doped = true; slots[team * n + k].dope = h.dope || 0; } });
@@ -41,6 +41,7 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
     if (usedBy(room, sl.id).includes(ch)) return '이 방에서 이미 쓴 캐릭터예요. 다른 캐릭터를 골라 주세요';
     sl.ch = ch; sl.rnd = false; return null;
   }
+  if (op.t === 'role') { if (si < 0 || !RC.ROLES[op.r]) return 'bad'; room.slots[si].role = op.r; return null; } // v0.95 역할
   if (op.t === 'dope') { // v0.64 도핑: 자기 자리에서 경기 전 한 번만
     if (si < 0) return 'bad'; const sl = room.slots[si]; if (sl.doped) return '도핑은 경기 전에 한 번만 할 수 있어요'; sl.doped = true; sl.dope = RC.rollDope(); return null;
   }
@@ -53,18 +54,19 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
   if (op.t === 'set') {
     if (!owner) return '방장만 바꿀 수 있어요';
     const k = op.k, v = op.v;
-    if (k === 'n') { if (![1, 2, 3].includes(v)) return 'bad'; const hs = humansOf(room); if (hs.length > v * 2) return '지금 인원으로는 그 모드를 할 수 없어요'; room.n = v; layoutRoom(room, hs); return null; }
+    if (k === 'n') { if (![1, 2, 3].includes(v)) return 'bad'; if (v !== 1) room.chal = ''; const hs = humansOf(room); if (hs.length > v * 2) return '지금 인원으로는 그 모드를 할 수 없어요'; room.n = v; layoutRoom(room, hs); return null; }
     if (k === 'stage') { if (v !== 'random' && !RC.STAGES.some(s => s.id === v)) return 'bad'; room.stage = v; return null; }
     if (k === 'diff') { if (!RC.DIFFS[v]) return 'bad'; room.diff = v; return null; }
     if (k === 'ctrl') { if (!RC.CTRLS[v]) return 'bad'; room.ctrl = v; return null; }
     if (k === 'target') { if (![10, 14, 20].includes(v)) return 'bad'; room.target = v; return null; }
     if (k === 'items') { room.items = !!v; return null; }
+    if (k === 'chal') { if (v !== '' && !RC.CHAL[v]) return 'bad'; if (v && humansOf(room).length > 1) return '도전 모드는 혼자 할 때만 돼요'; room.chal = v; if (v && room.n !== 1) { room.n = 1; layoutRoom(room, humansOf(room)); } return null; } // v0.95
   }
   return 'bad';
 }
 function pickStage(room) { return room.stage === 'random' ? RC.STAGES[Math.floor(Math.random() * RC.STAGES.length)].id : room.stage; }
-function gameCfg(room, stage) { rollBots(room); markUsed(room); return { stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
-function metaOf(room, stage) { return { n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), bots: room.slots.map(s => s.kind === 'bot'), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
+function gameCfg(room, stage) { rollBots(room); markUsed(room); return { chal: room.chal || '', stage, target: room.target, diff: room.chal === 'rally' ? 'easy' : room.diff, ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ role: s.role || 'all', ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
+function metaOf(room, stage) { return { n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), roles: room.slots.map(s => room.n === 1 ? 'all' : s.role || 'all'), bots: room.slots.map(s => s.kind === 'bot'), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
 function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
 /* 경기 상태 → 전송용 스냅샷 */
@@ -75,6 +77,10 @@ function pack(S, evs, acks) { // acks(v0.60): 자리마다 [받은 입력 번호
     b: [r(b.x), r(b.y), r(b.z), r(b.vx), r(b.vy), r(b.vz), f2(b.rot), b.lastTeam, b.touches, (b.power ? 1 : 0) | (b.cap ? 2 : 0) | (b.held ? 4 : 0) | (b.out ? 8 : 0) | (b.ultra ? 16 : 0), b.sup || 0, f1(b.fuse), f1(b.float), f1(b.home), b.noP, f2(b.prs || 0)],
     dc: S.decoys.map(d => [r(d.x), r(d.y), r(d.z), f2(d.rot)]),
     u: u ? [r(u.x), r(u.y), r(u.z), u.st, f2(u.t), u.team, f2(u.dur)] : 0,
+    db: S.dbl ? [S.dbl.on, S.dbl.used[0], S.dbl.used[1]] : 0,
+    sh: S.shoe ? [r(S.shoe.x), r(S.shoe.y), r(S.shoe.z), f1(S.shoe.rot), S.shoe.by] : 0,
+    gs: S.guest ? [S.guest.k, r(S.guest.x), r(S.guest.z), S.guest.dir, S.guest.st] : 0,
+    rf: S.ref ? [S.ref.team, S.ref.n, S.ref.st, f1(S.ref.t)] : 0,
     nl: S.netLive ? [S.netLive.team, f1(S.netLive.t), Math.round(S.netLive.dx), S.netLive.mode] : 0, bs: S.basin ? [S.basin.team, f1(S.basin.t)] : 0, eg: +S.env.g.toFixed(2), tf: S.thornF ? [S.thornF.team, ...S.thornF.pts.flat().map(r)] : 0, mm: S.mom ? [r(S.mom.x), r(S.mom.z), S.mom.st, f2(S.mom.t), S.mom.team] : 0,
     sm: S.steams.map(q => [r(q.x), r(q.z), f1(q.t), r(q.r)]), pg: S.pig ? [r(S.pig.x), r(S.pig.y), r(S.pig.z), S.pig.st, S.pig.dir] : 0, pz: S.pots.map(q => [r(q.x), r(q.z), f2(q.t)]), /* v0.63 전에는 이름이 pt 라서 위의 pt(단계 시간)를 덮어썼다 → 온라인에서 단계 시간이 깨져 있었음 */
     p: S.players.map(p => [r(p.x), r(p.y), r(p.z), r(p.vx), r(p.vy), r(p.vz), p.gnd ? 1 : 0, ACTS.indexOf(p.act), f2(p.actT), f2(p.chg), r(p.hp), r(p.gauge), (p.ko ? 1 : 0) | (p.big > 0 ? 2 : 0) | (p.mini > 0 ? 4 : 0) | (p.fast > 0 ? 8 : 0) | (p.soot > 0 ? 16 : 0) | (p.toss ? 32 : 0) | (p.aimOn ? 64 | ((p.aimX + 1) << 7) | ((p.aimZ + 1) << 9) : 0) | (p.supBan ? 2048 : 0) | (p.tis > 0 ? 4096 : 0) | (Math.min(7, p.supN | 0) << 13) | (Math.min(7, p.supCap || 7) << 16) | ((p.item ? RC.ITEMS.findIndex(i => i.id === p.item) + 1 : 0) << 19) | (p.ck > 1 ? 1 << 22 : 0), r(p.diveX * 9), ...STK.map(k => f1(p.st[k]))]),

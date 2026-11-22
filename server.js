@@ -6,9 +6,9 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.67'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.97'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
-const MAX_ROOMS = 40, DT = Core.DT;
+const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
 
 const server = http.createServer((req, res) => {
@@ -17,7 +17,7 @@ const server = http.createServer((req, res) => {
   if (u === '/') u = '/index.html';
   if (u === '/rooms') { // 열린 방 목록(방 찾기)
     const list = [];
-    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, lock: !!room.pw, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
+    for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, lock: !!room.pw, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, specs: (cfg.specs || []).length, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
@@ -47,7 +47,7 @@ function cleanName(v) { return String(v == null ? '' : v).replace(/[<>&"'\u0000-
 function startMatch(room) {
   const stage = R.pickStage(room.cfg);
   room.S = Core.newGame(R.gameCfg(room.cfg, stage)); room.meta = R.metaOf(room.cfg, stage);
-  room.acc = 0; room.stepN = 0; room.evOut = []; room.over = false;
+  room.acc = 0; room.stepN = 0; room.evOut = []; room.over = false; room.swapUsed = new Set(); // v0.97 경기 중 PC와 교체는 사람마다 경기당 1번
   for (const ws of room.clients.values()) { ws.inp = 0; ws.latch = 0; send(ws, { t: 'start', meta: room.meta, you: slotOf(room, ws.id) }); }
   bc(room, pub(room));
 }
@@ -68,12 +68,10 @@ function onHello(ws, m) {
     room = rooms.get(String(m.code || '').trim().toUpperCase());
     if (!room) return send(ws, { t: 'err', m: '그런 방이 없어요. 코드를 다시 확인해 주세요.' });
     if (room.pw && String(m.pw == null ? '' : m.pw) !== room.pw) return send(ws, { t: 'needpw', code: room.code, bad: m.pw != null && m.pw !== '' });
-    const idx = R.joinSlot(room.cfg);
-    if (idx < 0) return send(ws, { t: 'full' });
-    const jch = room.S ? room.S.players[idx].ch : R.randCh(R.fixedCh(room.cfg, R.teamOf(room.cfg, idx), idx)); // 경기 중 난입이면 그 자리 캐릭터를 이어받고, 로비면 팀에서 안 쓰는 캐릭터로
-    room.cfg.slots[idx] = { kind: 'human', id: ws.id, name, ch: jch };
-    if (room.S) { const p = room.S.players[idx]; p.bot = false; p.name = name; p.inp = 0; room.meta = R.metaOf(room.cfg, room.S.stage); bc(room, { t: 'meta', meta: room.meta }); }
-    bc(room, { t: 'toast', m: name + ' 님이 들어왔어요' });
+    const specs = room.cfg.specs || (room.cfg.specs = []);
+    const idx = room.S || m.spec ? -1 : R.joinSlot(room.cfg); // v0.97 경기 중인 방·빈자리 없는 방은 관전으로 들어온다
+    if (idx < 0) { if (specs.length >= MAX_SPECS) return send(ws, { t: 'full' }); specs.push({ id: ws.id, name }); bc(room, { t: 'toast', m: name + ' 님이 관전하러 왔어요' }); }
+    else { room.cfg.slots[idx] = { kind: 'human', id: ws.id, name, ch: R.randCh(R.fixedCh(room.cfg, R.teamOf(room.cfg, idx), idx)) }; bc(room, { t: 'toast', m: name + ' 님이 들어왔어요' }); }
   }
   ws.room = room; ws.name = name; room.clients.set(ws.id, ws);
   ws.bin = m.bin === 2 ? 2 : m.bin === 1 ? 1 : 0; // 0 글자, 1 이진 묶음, 2 이진 묶음 + 항목 이름 생략
@@ -85,6 +83,7 @@ function onHello(ws, m) {
 function onLeave(ws) {
   const room = ws.room; if (!room) return; ws.room = null;
   room.clients.delete(ws.id);
+  if (room.cfg.specs) room.cfg.specs = room.cfg.specs.filter(s => s.id !== ws.id);
   const i = slotOf(room, ws.id);
   if (i >= 0) {
     const s = room.cfg.slots[i]; room.cfg.slots[i] = { kind: 'bot', id: '', name: Core.CHARS[s.ch].name, ch: s.ch, auto: true };
@@ -102,12 +101,28 @@ function onMsg(ws, m) {
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
   if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; if (m.q != null) { ws.seq = (m.q | 0) & 255; ws.seqN = 0; } if (m.l != null) ws.lag = Math.max(0, Math.min(12, m.l | 0)); } // l(v0.61): 그 사람 화면의 공이 몇 틱 전 것인지 // q(v0.60): 입력 번호
-  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set' || m.t === 'dope') {
+  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set' || m.t === 'dope' || m.t === 'role') {
     if (room.S) return;
     const err = R.roomApply(room.cfg, ws.id, m, owner);
     if (err) { if (err !== 'bad') send(ws, { t: 'toast', m: err }); return; }
     bc(room, pub(room));
   }
+  else if (m.t === 'spec') { // v0.97 로비에서 선수 → 관전
+    if (room.S) return; const i = slotOf(room, ws.id); if (i < 0) return; const specs = room.cfg.specs || (room.cfg.specs = []); if (specs.length >= MAX_SPECS) return send(ws, { t: 'toast', m: '관전 자리가 가득 찼어요' });
+    const s = room.cfg.slots[i]; room.cfg.slots[i] = { kind: 'bot', id: '', name: Core.CHARS[s.ch].name, ch: s.ch, auto: true }; specs.push({ id: ws.id, name: ws.name }); bc(room, pub(room));
+  }
+  else if (m.t === 'play') { // v0.97 관전 → 선수(로비에서는 언제든, 경기 중에는 PC 자리와 교체 1번)
+    if (slotOf(room, ws.id) >= 0) return; const specs = room.cfg.specs || []; if (!specs.some(s => s.id === ws.id)) return;
+    const cfg = room.cfg, team = m.team === 0 || m.team === 1 ? m.team : -1, pick = () => { if (team >= 0) { for (let i = team * cfg.n; i < (team + 1) * cfg.n; i++) if (cfg.slots[i].kind === 'bot') return i; return -1; } return R.joinSlot(cfg); };
+    if (room.S && room.over) return;
+    if (room.S && room.swapUsed && room.swapUsed.has(ws.id)) return send(ws, { t: 'toast', m: '경기 중 참여는 한 번만 할 수 있어요' });
+    const idx = pick(); if (idx < 0) return send(ws, { t: 'toast', m: team >= 0 ? '그 팀에는 PC 자리가 없어요' : '빈자리가 없어요' });
+    cfg.specs = specs.filter(s => s.id !== ws.id);
+    if (room.S) { room.swapUsed.add(ws.id); const p = room.S.players[idx]; cfg.slots[idx] = { kind: 'human', id: ws.id, name: ws.name, ch: p.ch }; p.bot = false; p.name = ws.name; p.inp = 0; room.meta = R.metaOf(cfg, room.S.stage); bc(room, { t: 'meta', meta: room.meta }); send(ws, { t: 'seat', you: idx }); bc(room, { t: 'toast', m: ws.name + ' 님이 PC 대신 들어왔어요' }); }
+    else cfg.slots[idx] = { kind: 'human', id: ws.id, name: ws.name, ch: R.randCh(R.fixedCh(cfg, R.teamOf(cfg, idx), idx)) };
+    bc(room, pub(room));
+  }
+  else if (m.t === 'dbl') { const i = slotOf(room, ws.id); if (i >= 0 && room.S) Core.askDouble(room.S, i); } // v0.95 묻고 떠블로 가
   else if (m.t === 'emo') { const t = now(); if (t - (ws.emoAt || 0) < 500) return; ws.emoAt = t; const k = m.k | 0; if (k < 0 || k > 7) return; const i = slotOf(room, ws.id); if (i >= 0) bc(room, { t: 'emo', i, k }); }
   else if (m.t === 'chat') { const t = now(); if (t - (ws.chatAt || 0) < 700) return; ws.chatAt = t; const s = String(m.s == null ? '' : m.s).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40); if (!s) return; bc(room, { t: 'chat', i: slotOf(room, ws.id), name: ws.name, s }); }
   else if (m.t === 'start') { if (owner && !room.S) startMatch(room); }
