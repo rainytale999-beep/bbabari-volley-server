@@ -750,15 +750,16 @@ function ballNear(S, p, mul) {
   const ck = ctl(S, p), reach = 96 * s * (CHARS[p.ch].id === 'jiae' ? 1.2 : CHARS[p.ch].id === 'snurse' ? 1.05 : 1) * mul * ck.reach * prsK(S, p);
   return Math.hypot(b.x - p.x - f * 10 * s, b.y - p.y + 56 * s, (b.z - p.z) * ck.zk) < reach; // 2.5D라 깊이를 맞추기 어렵다 → 깊이 차이는 덜 따진다
 }
-/* v0.60 온라인 전용: 내 캐릭터의 이동·점프만 화면에서 먼저 계산한다(stepPlayer 의 이동 부분과 같은 공식. 상태는 바꾸지 않고 p 의 위치·속도만 바꾼다).
+/* v0.60~0.61 온라인 전용: 내 캐릭터의 이동·점프·동작(받기·모으기·스파이크·블로킹·다이빙)을 화면에서 먼저 계산한다.
+   stepPlayer 의 해당 부분과 같은 공식(타격 판정·필살기·체력은 서버만). stepPlayer 의 이동·동작 규칙을 바꾸면 여기도 같이 고칠 것.
    S = 가장 최근에 받은 서버 상태(+ env, pred), p = 내 캐릭터 사본, inp = 그 틱의 키, edge = 그 틱에 새로 눌린 키 */
 function predMove(S, p, inp, edge) {
   useCourt(S.n);
-  const s = p.st, inc = busy(p), ice = S.ice[p.team] > 0, ck = ctl(S, p), b = S.ball;
+  const c = CHARS[p.ch], s = p.st, inc = busy(p), ice = S.ice[p.team] > 0, ck = ctl(S, p), b = S.ball, serving = S.phase === 'serve' && S.server === p.i;
   let mx = 0, mz = 0;
-  if (!inc) { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
-  if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle') p.act = 'charge'; } }
-  const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !inc;
+  if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
+  if (serving) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
+  const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc;
   if (aimAir) {
     mx = mz = 0;
     if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < 320 * XS) {
@@ -767,24 +768,54 @@ function predMove(S, p, inp, edge) {
     }
   }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
-  if (!aimAir && ck.assist > 0 && !inc && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
+  if (!aimAir && ck.assist > 0 && !inc && !serving && p.act !== 'dive' && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
     const L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < 230) tz = L.z; }
     if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? 0.62 : 0.8) * ck.assist);
   }
-  const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1);
-  if (S.env.slip) p.mom = p.gnd && (mx || mz) && !inc ? Math.min(1, (p.mom || 0) + DT * 0.8) : Math.max(0, (p.mom || 0) - DT * 1.5);
-  const k = aimAir ? 1.3 : 1, acc = (p.gnd ? (ice ? 620 : (inc ? 1700 : (S.env.slip ? (mx || mz ? 950 : 560) : S.env.wet ? 3000 : 4600))) : (inc ? 0 : 2200)) * DT;
-  p.vx += clamp(mx * spd * k - p.vx, -acc, acc); p.vz += clamp(mz * spd * k - p.vz, -acc, acc);
-  if (!inc && p.gnd && (edge & K.S) && p.act !== 'charge') { p.vy = -jumpV(p); p.gnd = false; p.jumpHold = true; }
+  if (p.act === 'dive') {
+    if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 260 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
+    else { const fr = (ice ? 600 : S.env.slip ? 1300 : S.env.wet ? 1900 : 2600) * DT, v = Math.hypot(p.vx, p.vz); if (v > fr) { p.vx *= (v - fr) / v; p.vz *= (v - fr) / v; } else p.vx = p.vz = 0; }
+    const rem = (p.diveLen || 0) - Math.hypot(p.x - p.diveX0, p.z - p.diveZ0), v = Math.hypot(p.vx, p.vz);
+    if (rem <= 0) p.vx = p.vz = 0; else if (v * DT > rem) { p.vx *= rem / DT / v; p.vz *= rem / DT / v; }
+  } else {
+    const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1);
+    if (S.env.slip) p.mom = p.gnd && (mx || mz) && !inc ? Math.min(1, (p.mom || 0) + DT * 0.8) : Math.max(0, (p.mom || 0) - DT * 1.5);
+    const k = aimAir ? 1.3 : 1, acc = (p.gnd ? (ice ? 620 : (inc ? 1700 : (S.env.slip ? (mx || mz ? 950 : 560) : S.env.wet ? 3000 : 4600))) : (inc ? 0 : 2200)) * DT;
+    p.vx += clamp(mx * spd * k - p.vx, -acc, acc); p.vz += clamp(mz * spd * k - p.vz, -acc, acc);
+  }
+  let jumped = false;
+  if (!inc && p.gnd && p.act !== 'dive' && !serving && (edge & K.S) && p.act !== 'charge') { p.vy = -jumpV(p); p.gnd = false; p.jumpHold = true; jumped = true; }
   if (!p.gnd) p.vy += pGrav(S, p) * DT;
   const px0 = p.x;
   p.y += p.vy * DT; p.x += p.vx * DT; p.z += p.vz * DT;
-  if (p.y >= GY) { if (!p.gnd) { p.gnd = true; if (p.act === 'charge') p.act = 'idle'; } p.y = GY; p.vy = 0; }
-  const m = 24 * psc(p);
-  if (p.team === 0) { const lo = Math.min(m, px0); if (p.x < lo) { p.x = lo; p.vx = 0; } if (p.x > NETX - NETW / 2 - m) { p.x = NETX - NETW / 2 - m; p.vx = 0; } }
-  else { const hi = Math.max(CW - m, px0); if (p.x > hi) { p.x = hi; p.vx = 0; } if (p.x < NETX + NETW / 2 + m) { p.x = NETX + NETW / 2 + m; p.vx = 0; } }
+  if (p.y >= GY) { if (!p.gnd) { p.gnd = true; if (p.act === 'spike' || p.act === 'block' || p.act === 'super' || p.act === 'charge' || p.act === 'bump') { p.act = 'idle'; p.chg = 0; } } p.y = GY; p.vy = 0; }
+  const m = 24 * psc(p), out = 85 * XS;
+  if (p.team === 0) { const lo = serving ? -out : Math.min(m, px0); if (p.x < lo) { p.x = lo; p.vx = 0; } if (p.x > NETX - NETW / 2 - m) { p.x = NETX - NETW / 2 - m; p.vx = 0; } }
+  else { const hi = serving ? CW + out : Math.max(CW - m, px0); if (p.x > hi) { p.x = hi; p.vx = 0; } if (p.x < NETX + NETW / 2 + m) { p.x = NETX + NETW / 2 + m; p.vx = 0; } }
   if (p.z < 14) { p.z = 14; p.vz = 0; } if (p.z > ZD - 14) { p.z = ZD - 14; p.vz = 0; }
+  // ----- 동작(모션만. 맞았는지는 서버가 정한다) -----
+  const canAct = !inc && !jumped && (p.act === 'idle' || p.act === 'charge' || (p.act !== 'dive' && p.actT > 0.2));
+  if (canAct && S.phase === 'rally') {
+    let press = edge;
+    if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle') press |= K.S; } }
+    if ((edge & K.X) && p.gauge >= 100) { /* 필살기는 서버 결과를 기다린다 */ }
+    else if (press & K.A) {
+      const mate = p.gnd && !ballNear(S, p, 1.6) ? S.players.find(q => q.i !== p.i && q.team === p.team && (q.st.down > 0.3 || q.ko) && Math.hypot(q.x - p.x, q.z - p.z) < 80 * XS) : null;
+      if (mate) { /* 팀원 일으키기: 동작 없음 */ }
+      else if (p.gnd && (mx || mz) && !ballNear(S, p, 1.25)) {
+        const v = Math.hypot(mx, mz), maxD = DIVE_LEN * (c.id === 'sene' ? 1.45 : 1) * (S.env.slip || ice ? 1.3 : 1), L = S.pred && S.pred.land;
+        p.act = 'dive'; p.actT = 0; p.diveX = mx / v; p.diveZ = mz / v; p.diveX0 = p.x; p.diveZ0 = p.z; p.diveLen = maxD; p.chg = 0;
+        if (ck.assist > 0 && L && !b.held && !b.cap && sideOf(L.x) === p.team) { const dx = L.x - p.x, dz = L.z - p.z, dd = Math.hypot(dx, dz); if (dd > 1) { p.diveX = dx / dd; p.diveZ = dz / dd; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); } }
+      }
+      else { p.act = 'bump'; p.actT = 0; p.chg = 0; }
+    } else if ((press & K.S) && p.act !== 'charge' && !p.gnd) {
+      const blk = Math.abs(p.x - NETX) < 135 * XS && !b.held && !b.cap && b.lastTeam >= 0 && b.lastTeam !== p.team && sideOf(b.x) !== p.team;
+      if (blk) { p.act = 'block'; p.actT = 0; } else { p.act = 'charge'; p.actT = 0; p.chg = 0; }
+    }
+  }
+  if (p.act === 'charge') { if (serving) { /* 서브 모으기는 서버만 */ } else if (inp & K.S) p.chg = Math.min(1, (p.chg || 0) + DT / 0.42); else { p.act = 'spike'; p.actT = 0; } }
+  else if (p.act !== 'idle') { p.actT += DT; const dur = p.act === 'bump' ? 0.32 : p.act === 'spike' ? 0.36 : p.act === 'super' ? 0.55 : p.act === 'dive' ? (S.env.sand ? 0.62 : 0.82) : 9; if (p.actT >= dur) { p.act = 'idle'; p.actT = 0; } }
 }
 function stepPlayer(S, p) {
   const c = CHARS[p.ch], s = p.st;
@@ -960,12 +991,14 @@ function contacts(S) {
   const b = S.ball;
   if (b.held || b.cap || S.phase !== 'rally') return;
   const np = S.players.length;
+  { const h = S.bh || (S.bh = []); S.bhI = ((S.bhI | 0) + 1) & 15; h[S.bhI] = { x: b.x, y: b.y, z: b.z, ser: b.serial }; } // v0.61 최근 16틱의 공 위치(지연이 있는 사람의 타격 판정에 쓴다)
   for (let oi = 0; oi < np; oi++) {
     const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap || (S.netLive && S.netLive.mode)) return; /* v0.56 네트가 움직이는 중엔 결과가 정해진 공 */
     if (p.hitCd > 0) continue;
     if (b.lastTeam === p.team && b.teamCd > 0) continue;
     const ck = ctl(S, p), s = psc(p), f = fdir(p), c = CHARS[p.ch], rm = (c.id === 'jiae' ? 1.2 : c.id === 'snurse' ? 1.05 : 1) * ck.reach * prsK(S, p) * (S.rallyHits === 0 && b.lastTeam !== p.team ? (b.ultra ? 1 : 1.12) : 1) * (p.ck || 1);
-    const dist = (x, y, z) => Math.hypot(b.x - x, b.y - y, (b.z - z) * ck.zk), bodyD = d3(b.x, b.y, b.z, p.x, p.y - 46 * s, p.z);
+    const lg = !p.bot && p.lagT > 0 ? Math.min(12, p.lagT | 0) : 0, hb = lg ? S.bh[(S.bhI - lg) & 15] : null, vb = hb && hb.ser === b.serial ? hb : b; // v0.61 그 사람 화면에 보이던 공 위치(최대 0.2초 전, 그 사이 공을 누가 쳤으면 지금 위치)
+    const dist = (x, y, z) => Math.hypot(vb.x - x, vb.y - y, (vb.z - z) * ck.zk), bodyD = d3(b.x, b.y, b.z, p.x, p.y - 46 * s, p.z);
     if (!busy(p)) {
       const dbl = noTouch(S, p), no = () => { p.hitDone = true; if (p.dblS !== b.serial) { p.dblS = b.serial; ev(S, 'txt', p.x, p.y - 150, p.z, '연속 터치!', 0); } };
       if (p.act === 'bump' && p.actT <= 0.24 && !p.hitDone && dist(p.x + f * 10 * s, p.y - 56 * s, p.z) < 96 * s * rm) { if (dbl) no(); else hitBump(S, p, false); continue; }
