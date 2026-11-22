@@ -243,7 +243,7 @@ function ballStep(S, q, dt, real) {
   if (q.z > ZD - 6) { q.z = ZD - 6; q.vz = -Math.abs(q.vz) * 0.7; if (real) ev(S, 'wall', q.x, q.y, q.z); }
   if (S.env.ceil && q.y < S.env.ceil + BR) { q.y = S.env.ceil + BR; q.vy = Math.abs(q.vy) * 0.8; if (real) { ev(S, 'wall', q.x, q.y, q.z); if (q.srv) q.ceilFault = true; } }
   const hw = NETW / 2;
-  if (q.y > NETTOP - BR && Math.abs(q.x - NETX) < hw + BR) {
+  if (q.y > NETTOP - BR && Math.abs(q.x - NETX) < hw + BR && !(S.netLive && S.netLive.mode)) {
     const cx = clamp(q.x, NETX - hw, NETX + hw), cy = Math.max(q.y, NETTOP);
     let dx = q.x - cx, dy = q.y - cy, d = Math.hypot(dx, dy);
     if (d < BR) {
@@ -575,7 +575,7 @@ function applyInstant(S, p) {
   } else if (c.sup === 'giant') {
     p.st.giant = 7; p.st.shrink = 0; ev(S, 'giant', p.x, p.y - 100, p.z, p.i); ev(S, 'txt', p.x, p.y - 300, p.z, '멍멍!!', 3, 1); ev(S, 'shake', p.x, p.y, p.z, 2);
   } else if (c.sup === 'net') {
-    S.netLive = { team: p.team, t: 12, by: p.i }; ev(S, 'netlive', NETX, NETTOP, ZD / 2, p.team); ev(S, 'txt', NETX, NETTOP - 120, ZD / 2, '네트가 살아났다!', 1, 1);
+    S.netLive = { team: p.team, t: 12, by: p.i, dx: 0, tx: 0, mode: 0 }; /* v0.56 mode 1=우리 토스를 따라 우리 쪽으로 이동, 2=상대 공격을 마중 나가 상대 쪽으로 이동 */ ev(S, 'netlive', NETX, NETTOP, ZD / 2, p.team); ev(S, 'txt', NETX, NETTOP - 120, ZD / 2, '네트가 살아났다!', 1, 1);
   } else if (c.sup === 'half') {
     for (const q of opp) { q.st.half = 5 * cool(q); q.act = 'idle'; q.chg = 0; ev(S, 'half', q.x, q.y - 60, q.z); } ev(S, 'txt', oppD(p.team, 300), 220, ZD / 2, '반띵!! (삐약)', 3, 1);
   } else if (c.sup === 'heal') {
@@ -613,6 +613,22 @@ function hitSuper(S, p) {
   }
   ev(S, 'spike', b.x, b.y, b.z, 2, p.i); S.stopT = 0.15; ev(S, 'hit', b.x, b.y, b.z, 3, p.i);
 }
+function landX(S, b) { const g = ballG(S, b), a = 0.5 * g, c = b.y + BR - GY, d = b.vy * b.vy - 4 * a * c, t = d > 0 ? (-b.vy + Math.sqrt(d)) / (2 * a) : 0.5; return b.x + b.vx * Math.max(0, t); }
+function stepNetLive(S) { // v0.56 춤추는 네트가 실제로 자리를 옮긴다
+  const L = S.netLive, b = S.ball, T = L.team, own = T === 0 ? -1 : 1; // own = 우리 코트 쪽 방향
+  if (L.done) { L.tx = 0; if (S.phase === 'serve' || S.phase === 'swap') { S.netLive = null; return; } }
+  else if (S.phase === 'rally' && !L.mode && !b.held && !b.cap) {
+    const sd = b.x < NETX ? 0 : 1;
+    if (b.lastTeam === T && b.touches >= 2 && sd === T && b.vy < 0) { // 우리가 토스한 공: 네트가 공 뒤로 달려가 공을 상대 코트로 만들어 버린다
+      const lx = landX(S, b), edge = T === 0 ? Math.min(b.x, lx) - 90 * XS : Math.max(b.x, lx) + 90 * XS;
+      L.tx = clamp(edge, 70 * XS, CW - 70 * XS) - NETX; L.mode = 1; ev(S, 'txt', NETX, NETTOP - 150, ZD / 2, '네트가 달린다?!', 3, 1); ev(S, 'netlive', NETX, NETTOP, ZD / 2, T);
+    } else if (b.lastTeam === 1 - T && sd === 1 - T && b.vx * own > 60 && Math.abs(b.x - NETX) < 520 * XS && !b.srv) { // 상대 공격: 네트가 마중 나가 공을 막는다
+      L.tx = (b.x - NETX) * 0.55; L.mode = 2; ev(S, 'txt', NETX, NETTOP - 150, ZD / 2, '네트가 마중 나간다!', 3, 1); ev(S, 'netlive', NETX, NETTOP, ZD / 2, T);
+    }
+  }
+  const v = (L.done ? 900 : 1500) * DT, d = L.tx - L.dx; L.dx += Math.abs(d) < v ? d : Math.sign(d) * v;
+  if (L.mode === 1 && !L.done && S.phase !== 'rally') L.done = true;
+}
 function netCross(S, from) { // 공이 네트를 넘는 순간: 춤추는 네트·고무 다라이. true면 공을 새로 보냈다
   const b = S.ball;
   if (b.cap || b.held) return false;
@@ -626,6 +642,12 @@ function netCross(S, from) { // 공이 네트를 넘는 순간: 춤추는 네트
     if (q) { q.st.stun = Math.max(q.st.stun, 1.0 * cool(q)); q.st.tub = 1.4; q.act = 'idle'; q.chg = 0; ev(S, 'tub', q.x, q.y - 90, q.z); ev(S, 'txt', q.x, q.y - 160, q.z, '텅! 앞이 안 보여', 2); }
     S.basin = null; return true;
   }
+  if (S.netLive && S.netLive.mode === 2 && from !== S.netLive.team) { // v0.56 마중 나간 네트에 막혀 상대 공이 못 넘어온다
+    const L = S.netLive, nx = NETX + L.dx, back = from === 0 ? -1 : 1;
+    b.x = nx + back * (BR + 10); b.vx = back * 160; b.vy = Math.max(60, b.vy * 0.2); b.vz *= 0.3; b.power = false; b.sup = null; b.home = 0;
+    ev(S, 'net', b.x, b.y, b.z); ev(S, 'txt', nx, NETTOP - 100, b.z, '못 넘어와! 네트가 막았다', 3, 1); S.stopT = 0.12; return true;
+  }
+  if (S.netLive && S.netLive.mode) return false;
   if (S.netLive) {
     const L = S.netLive, T = L.team; S.netLive = null;
     if (from === T) { // 우리 공이 넘어가면 네트가 내리꽂는다
@@ -903,7 +925,7 @@ function contacts(S) {
   if (b.held || b.cap || S.phase !== 'rally') return;
   const np = S.players.length;
   for (let oi = 0; oi < np; oi++) {
-    const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap) return;
+    const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap || (S.netLive && S.netLive.mode)) return; /* v0.56 네트가 움직이는 중엔 결과가 정해진 공 */
     if (p.hitCd > 0) continue;
     if (b.lastTeam === p.team && b.teamCd > 0) continue;
     const ck = ctl(S, p), s = psc(p), f = fdir(p), c = CHARS[p.ch], rm = (c.id === 'jiae' ? 1.2 : c.id === 'snurse' ? 1.05 : 1) * ck.reach * prsK(S, p) * (S.rallyHits === 0 && b.lastTeam !== p.team ? (b.ultra ? 1 : 1.12) : 1) * (p.ck || 1);
@@ -1164,7 +1186,8 @@ function step(S) {
   if (b.teamCd > 0) b.teamCd -= DT;
   if (S.ufo && (S.phase === 'rally' || S.ufo.st === 2)) stepUfo(S);
   if (S.mom) stepMom(S);
-  if (S.phase === 'rally') { if (S.netLive && (S.netLive.t -= DT) <= 0) S.netLive = null; if (S.basin && (S.basin.t -= DT) <= 0) S.basin = null; }
+  if (S.netLive) stepNetLive(S);
+  if (S.phase === 'rally') { if (S.netLive && !S.netLive.mode && (S.netLive.t -= DT) <= 0) S.netLive = null; if (S.basin && (S.basin.t -= DT) <= 0) S.basin = null; }
   stepStage(S);
   if (S.phase === 'serve') {
     const p = S.players[S.server], f = fdir(p);
@@ -1185,18 +1208,18 @@ function step(S) {
           }
           b.nog = true; ballStep(S, b, DT / 2, true); b.nog = false;
           if (b.home <= 0) ev(S, 'txt', b.x, b.y - 40, b.z, '(가시공이 지쳤다)', 0);
-        } else { const px0 = b.x; ballStep(S, b, DT / 2, true); if (sideOf(px0) !== sideOf(b.x) && netCross(S, sideOf(px0))) continue; }
+        } else { const L = S.netLive, nx0 = NETX + (L ? L.dx : 0), px0 = b.x; ballStep(S, b, DT / 2, true); const nx1 = NETX + (L ? L.dx : 0); if ((px0 < nx0) !== (b.x < nx1) && netCross(S, px0 < nx0 ? 0 : 1)) continue; }
         b.rot += b.vx * DT / 2 / BR;
         if (b.prsSer !== b.serial) { b.prsSer = b.serial; b.prs = ballPrs(b); }
         if (b.srv && sideOf(b.x) !== b.lastTeam) b.srv = false; // 서브가 네트를 넘어감
         if (b.ceilFault) { b.ceilFault = false; b.srv = false; ev(S, 'txt', NETX, 250, ZD / 2, '서브 실패! (천장)', 3, 1); point(S, 1 - b.lastTeam, -1); break; }
         if (b.y + BR >= GY) {
           b.y = GY - BR;
-          if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
+          if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW) && !(S.netLive && S.netLive.mode)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
             ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, b.outK === 'serve' ? '서브 아웃!' : '아웃!', 2, 1);
             point(S, 1 - b.lastTeam, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; break;
           }
-          const side = sideOf(b.x), scorer = b.lastTeam === 1 - side ? b.lastP : -1;
+          const NL = S.netLive && S.netLive.mode ? S.netLive : null, side = NL ? (b.x < NETX + NL.dx ? 0 : 1) : sideOf(b.x), scorer = NL ? (side !== NL.team ? NL.by : -1) : b.lastTeam === 1 - side ? b.lastP : -1; if (NL) { NL.done = true; ev(S, 'txt', NETX + NL.dx, NETTOP - 130, ZD / 2, '네트 대이동 득점!!', 1, 1); }
           ev(S, 'ground', b.x, GY, b.z, b.sup || 0, b.power || b.sup ? 1 : 0); if (b.power || b.sup) S.stopT = 0.07;
           if (S.rallyHits === 0 && scorer >= 0) { ev(S, 'txt', NETX, 250, ZD / 2, '서브 에이스!', 1, 1); addGauge(S.players[scorer], 12); }
           const hot = b.sup === 'hot';
@@ -1225,7 +1248,7 @@ function step(S) {
     for (const q of S.peels) q.t -= DT;
     if (S.phaseT > 1.9) { if (S.winner >= 0) { S.phase = 'over'; S.phaseT = 0; ev(S, 'over', NETX, 300, ZD / 2, S.winner); } else { if (S.swapNext) { S.swapNext = false; swapSides(S); S.phase = 'swap'; S.phaseT = 0; } else startServe(S); } }
   } else if (S.phase === 'swap') { // v0.40: 코트 변경 — 2초 동안 '코트 변경' 표시, 선수는 새 자리로 걸어간다
-    if (S.phaseT > 2.6) startServe(S);
+    if (S.phaseT > 2.6 + (S.swapHold || 0)) startServe(S); /* v0.56 혼자 하기: 클릭하거나 3초 뒤 시작 */
   }
 }
 

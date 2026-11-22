@@ -6,10 +6,10 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.55'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.56'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
+const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
 
 const server = http.createServer((req, res) => {
   let u = '/';
@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
   const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
-  if ((u !== '/index.html' && !u.startsWith('/assets/')) || !file.startsWith(ROOT + path.sep)) { res.writeHead(404); return res.end('not found'); }
+  if ((u !== '/index.html' && !u.startsWith('/assets/') && !u.startsWith('/fonts/')) || !file.startsWith(ROOT + path.sep)) { res.writeHead(404); return res.end('not found'); }
   fs.readFile(file, (err, buf) => {
     if (err) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': u === '/index.html' || u === '/assets/manifest.js' ? 'no-cache' : 'public, max-age=2592000' }); // 그림·소리는 30일 저장(주소 뒤 ?v= 가 바뀌면 새로 받는다)
