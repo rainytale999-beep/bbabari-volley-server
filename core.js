@@ -103,7 +103,7 @@ const CTRLS = { // 조작 난이도
   pro: { name: '수동', desc: '도움 없음. 앞뒤 위치와 타이밍을 전부 직접 맞춘다(버튼 안내도 꺼짐)', zk: 1, reach: 1, assist: 0, perf: 0.075, auto: false, buf: 0 },
 };
 /* v0.64 도핑: 로비에서 시작 전에 한 번 누르면 능력치가 무작위로 바뀐다. 50% = 모든 능력치 별 0.5칸(0.5~10칸). [별 변화, 확률%] — 나머지는 그대로 */
-const DOPE_T = [[10, 0.01], [5, 0.1], [2, 1], [1.5, 2.5], [1, 5], [0.5, 11.39], [-0.5, 20], [-1, 10], [-1.5, 7], [-2, 3]]; // v0.67 좋아질 확률 20%(대박 +500% 0.1%, +1000% 0.01% 포함), 나빠질 확률 40%, 그대로 40%
+const DOPE_T = [[1, 1], [0.8, 2], [0.6, 3], [0.4, 5], [0.2, 9], [-0.1, 25], [-0.2, 15]]; // v1.04 범위 -20%~+100%(100% = 능력치 1칸): 좋아짐 20%(+100% 1%), 그대로 40%, 나빠짐 40%
 function rollDope() { let r = Math.random() * 100; for (const [d, pc] of DOPE_T) { if (r < pc) return d; r -= pc; } return 0; }
 function dopeLabel(d) { return d ? (d > 0 ? '+' : '') + Math.round(d * 100) + '%' : '그대로'; }
 const DOPED = {};
@@ -133,10 +133,10 @@ function pSpeed(S, p) {
 function pGrav(S, p) { return GP * (p.act === 'block' && S.env.g < 1 ? 1 : S.env.g) * (chOf(p).id === 'dalgareum' ? 0.76 : 1) * (S.env.jelly ? 0.86 : 1); } // 과자 나라: 젤리 바닥이라 높이 뜬다
 const ROLES = { // v0.98 역할: 비슷한 실력이면 역할을 잘 해내는 쪽이 이긴다(2대2·3대3, 1대1은 만능)
   all: { name: '만능', short: '만', icon: '⭐', desc: '능력 그대로', up: ['모든 능력 그대로'], down: [] },
-  libero: { name: '리베로', short: '리', icon: '🧤', desc: '받기·다이빙↑ 강타 버팀 / 공격·점프↓', up: ['받기 범위 +15%', '리시브 정확 +25%', '다이빙 거리 +25%', '강타를 40% 버팀', '나이스 리시브 게이지 +10'], down: ['스파이크 힘 -30%', '점프 -15%', '블로킹 -50%'] },
-  setter: { name: '세터', short: '세', icon: '🙌', desc: '토스↑ 내 토스로 동료 공격↑ 이동↑ / 공격↓', up: ['토스 정확 +50%', '내 토스로 동료 스파이크 +22%', '이동 속도 +10%', '나이스 토스 게이지 +10'], down: ['스파이크 힘 -8%'] },
-  spiker: { name: '스파이커', short: '스', icon: '💥', desc: '공격·점프·블로킹↑ 아웃↓ / 받기↓', up: ['스파이크 힘 +12%', '점프 +6%', '스파이크 아웃 -20%', '블로킹 +10%', '스파이크 득점 게이지 +10'], down: ['받기 범위 -15%', '리시브 정확 -25%'] } };
-const RK = { libero: { reach: 1.15, rcv: 1.25, dive: 1.25, spk: 0.7, jmp: 0.85, blk: 0.5, tough: 0.4 }, setter: { toss: 1.5, spd: 1.1, spk: 0.92, setb: 1.22 }, spiker: { spk: 1.12, jmp: 1.06, out: 0.8, blk: 1.1, reach: 0.85, rcv: 0.75 } };
+  libero: { name: '리베로', short: '리', icon: '🧤', desc: '수비의 신 / 공격·점프 크게↓', up: ['받기 범위 +40%', '리시브 정확 +80%', '다이빙 +50%', '강타를 80% 버팀'], down: ['스파이크 힘 -40%', '점프 -25%'] },
+  setter: { name: '세터', short: '세', icon: '🙌', desc: '토스의 신 / 공격·리시브↓', up: ['토스 정확 +100%', '내 토스로 동료 스파이크 +40%', '이동 속도 +15%'], down: ['스파이크 힘 -30%', '리시브 -20%'] },
+  spiker: { name: '스파이커', short: '스', icon: '💥', desc: '공격의 신 / 받기 크게↓', up: ['스파이크 힘 +35%', '점프 +20%', '스파이크 아웃 -50%', '블로킹 +30%'], down: ['받기 범위 -30%', '리시브 -40%'] } }; // v1.02 한쪽 능력에 크게 몰아준다
+const RK = { libero: { reach: 1.4, rcv: 1.8, dive: 1.5, tough: 0.8, spk: 0.6, jmp: 0.75, blk: 0.6 }, setter: { toss: 2.0, setb: 1.4, spd: 1.15, spk: 0.7, rcv: 0.8 }, spiker: { spk: 1.35, jmp: 1.2, out: 0.5, blk: 1.3, reach: 0.7, rcv: 0.6 } };
 function roleK(p, k) { const r = RK[roleOf(p)]; return r && r[k] != null ? r[k] : 1; }
 function roleOf(p) { return p && p.role && ROLES[p.role] ? p.role : 'all'; }
 function powV(c) { return 1155 + (c.pow - 3) * 200; } // 파워 → 스파이크·강서브 공 속도(파워 3 = 예전과 같음)
