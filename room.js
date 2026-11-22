@@ -6,7 +6,7 @@ function randCh(used) { const all = RC.CHARS.map((c, i) => i), free = all.filter
 function mkRoom(n) { return { n, stage: 'random', target: 10, diff: 'normal', ctrl: 'normal', items: true, owner: '', slots: [] }; }
 function layoutRoom(room, humans) { // 사람을 양 팀에 번갈아 앉히고 나머지는 PC
   const n = room.n, slots = new Array(n * 2).fill(null);
-  humans.forEach((h, i) => { const team = i % 2, k = i >> 1; if (k < n) slots[team * n + k] = { kind: 'human', id: h.id, name: h.name, ch: h.ch, rnd: !!h.rnd }; });
+  humans.forEach((h, i) => { const team = i % 2, k = i >> 1; if (k < n) slots[team * n + k] = { kind: 'human', id: h.id, name: h.name, ch: h.ch, rnd: !!h.rnd }; if (h.doped) { slots[team * n + k].doped = true; slots[team * n + k].dope = h.dope || 0; } });
   const used = slots.filter(Boolean).map(s => s.ch);
   for (let i = 0; i < slots.length; i++) if (!slots[i]) { const ch = randCh(used); used.push(ch); slots[i] = { kind: 'bot', id: '', name: RC.CHARS[ch].name, ch, auto: true }; }
   room.slots = slots; fixTeams(room);
@@ -18,7 +18,11 @@ function fixTeams(room) {
   room.slots.forEach((s, i) => { if (s.kind !== 'human' || s.rnd) return; const T = teamOf(room, i); if (room.slots.some((q, j) => j < i && teamOf(room, j) === T && q.kind === 'human' && !q.rnd && q.ch === s.ch)) s.ch = randCh(fixedCh(room, T, i)); });
   room.slots.forEach(s => { if (s.kind === 'bot') s.auto = true; });
 }
-function rollBots(room) { for (const T of [0, 1]) { const used = fixedCh(room, T, -1); room.slots.forEach((s, i) => { if (teamOf(room, i) !== T) return; if (s.kind === 'human' && s.rnd) { s.ch = randCh(used); used.push(s.ch); } else if (s.kind === 'bot' && s.auto) { s.ch = randCh(used); s.name = RC.CHARS[s.ch].name; used.push(s.ch); } }); } } // 랜덤을 고른 사람도 시작할 때 정해진다
+/* v0.63 같은 방에서 한 번 쓴 캐릭터는 그 사람이 다시 못 쓴다(room.used: 사람 id → 쓴 캐릭터 번호들). 15종을 다 쓰면 처음부터 다시 */
+function usedBy(room, id) { return (room.used && room.used[id]) || []; }
+function markUsed(room) { room.used = room.used || {}; const live = {}; for (const s of room.slots) if (s.kind === 'human') { let u = usedBy(room, s.id).filter(c => c !== s.ch); if (u.length >= RC.CHARS.length - 1) u = []; u.push(s.ch); live[s.id] = u; } for (const id in room.used) if (!live[id]) live[id] = room.used[id]; room.used = live; }
+function afterGame(room) { for (let i = 0; i < room.slots.length; i++) { const s = room.slots[i]; delete s.doped; delete s.dope; /* 도핑은 한 경기만 */ if (s.kind === 'human' && !s.rnd && usedBy(room, s.id).includes(s.ch)) s.ch = randCh(fixedCh(room, teamOf(room, i), i).concat(usedBy(room, s.id))); } } // 로비로 돌아오면 방금 쓴 캐릭터 대신 안 쓴 캐릭터로 바꿔 둔다
+function rollBots(room) { for (const T of [0, 1]) { const used = fixedCh(room, T, -1); room.slots.forEach((s, i) => { if (teamOf(room, i) !== T) return; if (s.kind === 'human' && s.rnd) { const mine = usedBy(room, s.id), ex = used.concat(mine); s.ch = randCh(ex.length >= RC.CHARS.length ? mine : ex); used.push(s.ch); } else if (s.kind === 'bot' && s.auto) { s.ch = randCh(used); s.name = RC.CHARS[s.ch].name; used.push(s.ch); } }); } } // 랜덤을 고른 사람도 시작할 때 정해진다
 function humansOf(room) { return room.slots.filter(s => s.kind === 'human'); }
 function sideCount(room, T) { let c = 0; for (let i = 0; i < room.n; i++) if (room.slots[T * room.n + i].kind === 'human') c++; return c; }
 function joinSlot(room) { // 새로 들어온 사람이 앉을 PC 자리(인원이 적은 팀 우선). 없으면 -1
@@ -34,7 +38,11 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
     if (op.ch === -1) { sl.rnd = true; return null; } // 🎲 랜덤: 경기를 시작할 때 정한다
     const ch = op.ch | 0; if (!(ch >= 0 && ch < RC.CHARS.length) || ch !== op.ch) return 'bad';
     if (room.slots.some((q, j) => j !== tgt && teamOf(room, j) === T && q.kind === 'human' && !q.rnd && q.ch === ch)) return '같은 팀의 다른 사람이 이미 고른 캐릭터예요';
+    if (usedBy(room, sl.id).includes(ch)) return '이 방에서 이미 쓴 캐릭터예요. 다른 캐릭터를 골라 주세요';
     sl.ch = ch; sl.rnd = false; return null;
+  }
+  if (op.t === 'dope') { // v0.64 도핑: 자기 자리에서 경기 전 한 번만
+    if (si < 0) return 'bad'; const sl = room.slots[si]; if (sl.doped) return '도핑은 경기 전에 한 번만 할 수 있어요'; sl.doped = true; sl.dope = RC.rollDope(); return null;
   }
   if (op.t === 'move') {
     if (si < 0 || !Number.isInteger(op.slot) || !room.slots[op.slot] || room.slots[op.slot].kind !== 'bot') return 'bad';
@@ -55,8 +63,8 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
   return 'bad';
 }
 function pickStage(room) { return room.stage === 'random' ? RC.STAGES[Math.floor(Math.random() * RC.STAGES.length)].id : room.stage; }
-function gameCfg(room, stage) { rollBots(room); return { stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ ch: s.ch, name: s.name, bot: s.kind === 'bot' })) }; }
-function metaOf(room, stage) { return { n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), bots: room.slots.map(s => s.kind === 'bot') }; }
+function gameCfg(room, stage) { rollBots(room); markUsed(room); return { stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
+function metaOf(room, stage) { return { n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), bots: room.slots.map(s => s.kind === 'bot'), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
 function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
 /* 경기 상태 → 전송용 스냅샷 */
@@ -68,7 +76,7 @@ function pack(S, evs, acks) { // acks(v0.60): 자리마다 [받은 입력 번호
     dc: S.decoys.map(d => [r(d.x), r(d.y), r(d.z), f2(d.rot)]),
     u: u ? [r(u.x), r(u.y), r(u.z), u.st, f2(u.t), u.team, f2(u.dur)] : 0,
     nl: S.netLive ? [S.netLive.team, f1(S.netLive.t), Math.round(S.netLive.dx), S.netLive.mode] : 0, bs: S.basin ? [S.basin.team, f1(S.basin.t)] : 0, eg: +S.env.g.toFixed(2), tf: S.thornF ? [S.thornF.team, ...S.thornF.pts.flat().map(r)] : 0, mm: S.mom ? [r(S.mom.x), r(S.mom.z), S.mom.st, f2(S.mom.t), S.mom.team] : 0,
-    sm: S.steams.map(q => [r(q.x), r(q.z), f1(q.t), r(q.r)]), pg: S.pig ? [r(S.pig.x), r(S.pig.y), r(S.pig.z), S.pig.st, S.pig.dir] : 0, pt: S.pots.map(q => [r(q.x), r(q.z), f2(q.t)]),
+    sm: S.steams.map(q => [r(q.x), r(q.z), f1(q.t), r(q.r)]), pg: S.pig ? [r(S.pig.x), r(S.pig.y), r(S.pig.z), S.pig.st, S.pig.dir] : 0, pz: S.pots.map(q => [r(q.x), r(q.z), f2(q.t)]), /* v0.63 전에는 이름이 pt 라서 위의 pt(단계 시간)를 덮어썼다 → 온라인에서 단계 시간이 깨져 있었음 */
     p: S.players.map(p => [r(p.x), r(p.y), r(p.z), r(p.vx), r(p.vy), r(p.vz), p.gnd ? 1 : 0, ACTS.indexOf(p.act), f2(p.actT), f2(p.chg), r(p.hp), r(p.gauge), (p.ko ? 1 : 0) | (p.big > 0 ? 2 : 0) | (p.mini > 0 ? 4 : 0) | (p.fast > 0 ? 8 : 0) | (p.soot > 0 ? 16 : 0) | (p.toss ? 32 : 0) | (p.aimOn ? 64 | ((p.aimX + 1) << 7) | ((p.aimZ + 1) << 9) : 0) | (p.supBan ? 2048 : 0) | (p.tis > 0 ? 4096 : 0) | (Math.min(7, p.supN | 0) << 13) | (Math.min(7, p.supCap || 7) << 16) | ((p.item ? RC.ITEMS.findIndex(i => i.id === p.item) + 1 : 0) << 19) | (p.ck > 1 ? 1 << 22 : 0), r(p.diveX * 9), ...STK.map(k => f1(p.st[k]))]),
     ak: [S.slowT > 0 ? 1 : 0, ...S.players.map((p, i) => p.bot ? 0 : [acks && acks[i] ? acks[i][0] : 0, acks && acks[i] ? acks[i][1] : 255, r((p.ck || 1) * 100), r((p.mom || 0) * 100), f1(p.st.moon || 0), f1(p.st.wet2 || 0), ...(p.act === 'dive' ? [r((p.diveX || 0) * 100), r((p.diveZ || 0) * 100), r(Math.max(0, (p.diveLen || 0) - Math.hypot(p.x - (p.diveX0 || 0), p.z - (p.diveZ0 || 0))))] : [])])],
     it: S.items.map(i => [i.id, i.type, r(i.x), r(i.y), r(i.z), f1(i.t)]), pl: S.peels.map(q => [r(q.x), r(q.z)]), ev: evs };
@@ -112,5 +120,5 @@ function dec(buf) {
   return r();
 }
 
-const RoomLib = { enc, dec, teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
+const RoomLib = { usedBy, markUsed, afterGame, enc, dec, teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
 if (typeof module !== 'undefined' && module.exports && RC !== (typeof Core === 'undefined' ? null : Core)) module.exports = RoomLib;

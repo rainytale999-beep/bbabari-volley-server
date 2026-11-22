@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '0.61'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '0.67'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -51,7 +51,7 @@ function startMatch(room) {
   for (const ws of room.clients.values()) { ws.inp = 0; ws.latch = 0; send(ws, { t: 'start', meta: room.meta, you: slotOf(room, ws.id) }); }
   bc(room, pub(room));
 }
-function toLobby(room) { room.S = null; room.over = false; bc(room, { t: 'lobby' }); bc(room, pub(room)); }
+function toLobby(room) { room.S = null; room.over = false; R.afterGame(room.cfg); bc(room, { t: 'lobby' }); bc(room, pub(room)); }
 
 function onHello(ws, m) {
   if (ws.room) return;
@@ -102,7 +102,7 @@ function onMsg(ws, m) {
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
   if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; if (m.q != null) { ws.seq = (m.q | 0) & 255; ws.seqN = 0; } if (m.l != null) ws.lag = Math.max(0, Math.min(12, m.l | 0)); } // l(v0.61): 그 사람 화면의 공이 몇 틱 전 것인지 // q(v0.60): 입력 번호
-  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set') {
+  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set' || m.t === 'dope') {
     if (room.S) return;
     const err = R.roomApply(room.cfg, ws.id, m, owner);
     if (err) { if (err !== 'bad') send(ws, { t: 'toast', m: err }); return; }
