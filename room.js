@@ -22,7 +22,12 @@ function fixTeams(room) {
 function usedBy(room, id) { return (room.used && room.used[id]) || []; }
 function markUsed(room) { room.used = room.used || {}; const live = {}; for (const s of room.slots) if (s.kind === 'human') { let u = usedBy(room, s.id).filter(c => c !== s.ch); if (u.length >= RC.CHARS.length - 1) u = []; u.push(s.ch); live[s.id] = u; } for (const id in room.used) if (!live[id]) live[id] = room.used[id]; room.used = live; }
 function afterGame(room) { for (let i = 0; i < room.slots.length; i++) { const s = room.slots[i]; delete s.doped; delete s.dope; /* 도핑은 한 경기만 */ if (s.kind === 'human' && !s.rnd && usedBy(room, s.id).includes(s.ch)) s.ch = randCh(fixedCh(room, teamOf(room, i), i).concat(usedBy(room, s.id))); } } // 로비로 돌아오면 방금 쓴 캐릭터 대신 안 쓴 캐릭터로 바꿔 둔다
-function rollBots(room) { for (const T of [0, 1]) { const used = fixedCh(room, T, -1); room.slots.forEach((s, i) => { if (teamOf(room, i) !== T) return; if (s.kind === 'human' && s.rnd) { const mine = usedBy(room, s.id), ex = used.concat(mine); s.ch = randCh(ex.length >= RC.CHARS.length ? mine : ex); used.push(s.ch); } else if (s.kind === 'bot' && s.auto) { s.ch = randCh(used); s.name = RC.CHARS[s.ch].name; used.push(s.ch); } }); } } // 랜덤을 고른 사람도 시작할 때 정해진다
+function rollRoles(room) { // v0.98 PC는 팀에 비어 있는 역할을 맡는다(2대2: 스파이커·세터, 3대3: 스파이커·세터·리베로)
+  for (const T of [0, 1]) { const idx = room.slots.map((s, i) => i).filter(i => teamOf(room, i) === T), pool = room.n >= 3 ? ['spiker', 'setter', 'libero'] : ['spiker', 'setter'];
+    const taken = idx.filter(i => room.slots[i].kind === 'human').map(i => room.slots[i].role || 'all');
+    for (const i of idx) { const s = room.slots[i]; if (s.kind !== 'bot') continue; if (room.n < 2) { s.role = 'all'; continue; } const r = pool.find(k => !taken.includes(k)); s.role = r || 'all'; if (r) taken.push(r); } }
+}
+function rollBots(room) { rollRoles(room); for (const T of [0, 1]) { const used = fixedCh(room, T, -1); room.slots.forEach((s, i) => { if (teamOf(room, i) !== T) return; if (s.kind === 'human' && s.rnd) { const mine = usedBy(room, s.id), ex = used.concat(mine); s.ch = randCh(ex.length >= RC.CHARS.length ? mine : ex); used.push(s.ch); } else if (s.kind === 'bot' && s.auto) { s.ch = randCh(used); s.name = RC.CHARS[s.ch].name; used.push(s.ch); } }); } } // 랜덤을 고른 사람도 시작할 때 정해진다
 function humansOf(room) { return room.slots.filter(s => s.kind === 'human'); }
 function sideCount(room, T) { let c = 0; for (let i = 0; i < room.n; i++) if (room.slots[T * room.n + i].kind === 'human') c++; return c; }
 function joinSlot(room) { // 새로 들어온 사람이 앉을 PC 자리(인원이 적은 팀 우선). 없으면 -1
