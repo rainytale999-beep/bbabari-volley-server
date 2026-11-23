@@ -92,16 +92,18 @@ const SCAT = { goseum: 'atk', barcode: 'atk', bami: 'atk', iseu: 'atk', midwae: 
 const CATN = { atk: '공격형', dis: '방해형', def: '수비형' }, BEATS = { def: 'atk', atk: 'dis', dis: 'def' };
 for (const c of CHARS) c.cat = SCAT[c.id];
 const DIFFS = {
-  easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5, counter: 0 },
-  normal: { name: '보통',   react: 0.27, err: 24, block: 0.27, dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3, counter: 0.25 },
-  hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.45,  dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12, counter: 0.6 },
-  hell:   { name: '지옥',   react: 0.07, err: 3,  block: 0.6,  dive: 0.95, perf: 0.45, two: 0.45, sup: 1,   chg: 1,   miss: 0.04, counter: 0.9 }, // v1.06 가장 어려움: 반응·정확도·블로킹·빈자리 공격 최상
+  easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5, counter: 0, dig: 0 },
+  normal: { name: '보통',   react: 0.23, err: 20, block: 0.3,  dive: 0.55, perf: 0.1,  two: 0.14, sup: 0.8, chg: 0.55, miss: 0.22, counter: 0.3, dig: 0.25 }, // v1.16 더 어렵게(전: react 0.27 err 24 block 0.27 dive 0.45 perf 0.08 two 0.12 chg 0.5 miss 0.3 counter 0.25)
+  hard:   { name: '어려움', react: 0.12, err: 7,  block: 0.5,  dive: 0.88, perf: 0.3,  two: 0.34, sup: 1,   chg: 1,   miss: 0.08, counter: 0.7, dig: 0.45 }, // v1.16 더 어렵게(전: react 0.15 err 9 block 0.45 dive 0.8 perf 0.25 two 0.3 miss 0.12 counter 0.6)
+  hell:   { name: '지옥',   react: 0.07, err: 3,  block: 0.6,  dive: 0.95, perf: 0.45, two: 0.45, sup: 1,   chg: 1,   miss: 0.04, counter: 0.9, dig: 0.6 }, // v1.06 가장 어려움: 반응·정확도·블로킹·빈자리 공격 최상
 };
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
+const SPK_CHG = 0.6, SPK_HOLD = 0.5, SPK_POW = 1.0; // v1.16 강스파이크 어렵게(전: 힘 모으기 0.42초, 꽉 찬 뒤 0.9초 버팀, 힘 0.9 넘으면 강타)
+const RCV_K = 0.9; // v1.16 사람의 리시브(상대 공 받기) 손 닿는 거리 10% 줄임(모든 난이도)
 const CTRLS = { // 조작 난이도
-  easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.15, auto: true, buf: 0.22 },
-  normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.1, auto: false, buf: 0.18 }, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
-  pro: { name: '수동', desc: '도움 없음. 앞뒤 위치와 타이밍을 전부 직접 맞춘다(버튼 안내도 꺼짐)', zk: 1, reach: 1, assist: 0, perf: 0.075, auto: false, buf: 0 },
+  easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.12, auto: true, buf: 0.18 } /* v1.16 perf 0.15→0.12, buf 0.22→0.18 */,
+  normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.08, auto: false, buf: 0.14 } /* v1.16 perf 0.1→0.08, buf 0.18→0.14 */, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
+  pro: { name: '수동', desc: '도움 없음. 앞뒤 위치와 타이밍을 전부 직접 맞춘다(버튼 안내도 꺼짐)', zk: 1, reach: 1, assist: 0, perf: 0.06, auto: false, buf: 0 } /* v1.16 perf 0.075→0.06 */,
 };
 /* v0.64 도핑: 로비에서 시작 전에 한 번 누르면 능력치가 무작위로 바뀐다. 50% = 모든 능력치 별 0.5칸(0.5~10칸). [별 변화, 확률%] — 나머지는 그대로 */
 const DOPE_T = [[0.4, 2], [0.3, 4], [0.2, 6], [0.1, 8], [-0.1, 25], [-0.2, 15]]; // v1.05 범위 -20%~+40%(100% = 능력치 1칸): 좋아짐 20%(+40% 2%), 그대로 40%, 나빠짐 40%
@@ -496,7 +498,7 @@ function hitSpike(S, p) {
   if (duo) { mul *= 1.15; ev(S, 'duo', p.x, p.y, p.z, p.i, duo.i); ev(S, 'txt', (p.x + duo.x) / 2, p.y - 250, (p.z + duo.z) / 2, '합동 스파이크!!', 1, 1); }
   const sp = powV(c) * fat(p) * roleK(p, 'spk') * (setB >= 0 ? roleK(S.players[setB], 'setb') : 1) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul * (p.st.giant > 0 ? 1.6 : 1) /* v1.15 1.4→1.6 */ * (p.st.half > 0 ? 0.45 : 1) * (c.id === 'banban' && p.bw ? 1.1 : 1) * (chance ? 1.5 : 1) * (p.ck || 1);
   b.home = 0;
-  drive(S, b, tg.x, tg.z, GY - BR, sp); b.power = !p.gnd && p.pw > 0.9;
+  drive(S, b, tg.x, tg.z, GY - BR, sp); b.power = !p.gnd && p.pw > (p.bot ? 0.9 : SPK_POW); // 강스파이크 어렵게는 사람만(PC 공격은 그대로)
   if (!b.sup && !(p.st.giant > 0) && !S.tut) { // v0.41 스파이크 아웃: 힘·기술·조준 칸(끝·옆줄)·타이밍(손에서 먼 곳)·랠리 과열로 늘고, 연결 공격이면 줄어든다
     const s2 = psc(p), off = clamp(d3(b.x, b.y, b.z, p.x + fdir(p) * 16 * s2, p.y - 80 * s2, p.z) / (100 * s2 * ctl(S, p).reach), 0, 1);
     const po = (OUT.spk + (6 - tq(c)) * OUT.tec + (p.pw >= 1.26 ? OUT.full : p.pw > 1.1 ? OUT.strong : 0) + (d.fwd ? OUT.deep : 0) + (d.far || d.near ? OUT.side : 0) + off * off * OUT.late + heat(S) * OUT.heat) * (p.gnd ? 0.5 : 1) * acc * roleK(p, 'out');
@@ -539,6 +541,7 @@ function hitBody(S, p) {
   if (s.down > 0 && c.id === 'bbabjji' && !p.ko && Math.random() < 0.5) { /* v0.50 바둥바둥 리시브는 절반 확률 */ lob(S, b, netD(T, 200) + rnd(-50, 50), p.z + rnd(-40, 40), GY - 240, GY - 430); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 1); ev(S, 'txt', p.x, p.y - 90, p.z, '바둥바둥 리시브!', 1); return; }
   if (strong && c.id === 'bami' && s.down <= 0) { lob(S, b, netD(T, 170) + rnd(-25, 25), (p.z + ZD / 2) / 2, GY - 240, GY - 450); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 3); ev(S, 'txt', p.x, p.y - 150, p.z, '밤송이 헤딩!', 1); p.stats.rcv++; return; }
   if (strong && c.id === 'darai' && s.down <= 0) { s.stun = Math.max(s.stun, 0.45); lob(S, b, netD(T, 190) + rnd(-60, 60), p.z + rnd(-50, 50), GY - 240, GY - 420); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '텅!', 2); S.stopT = 0.08; return; }
+  if (strong && p.bot && s.down <= 0 && s.frozen <= 0 && v <= 1150 && Math.random() < (DIFFS[S.diff] || DIFFS.normal).dig) { lob(S, b, netD(T, 190) + rnd(-60, 60), p.z + rnd(-50, 50), GY - 230, GY - 420); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '디그!', 1); p.stats.rcv++; return; } // v1.16 PC 강타 받아 내기(보통 25%·어려움 45%·지옥 60%)
   if (strong && s.down <= 0 && s.frozen <= 0 && v <= 1150 && roleOf(p) === 'libero' && Math.random() < roleK(p, 'tough')) { lob(S, b, netD(T, 190) + rnd(-50, 50), p.z + rnd(-40, 40), GY - 240, GY - 440); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '리베로 디그!', 1); p.stats.rcv++; addGauge(p, 6); return; } // v0.98 리베로: 강타를 절반 확률로 버텨 낸다
   if (strong && s.down <= 0 && s.frozen <= 0) {
     S.stopT = 0.13; ev(S, 'hit', b.x, b.y, b.z, 3, p.i);
@@ -800,7 +803,7 @@ function doServe(S, p, power, inp, chg, flt) {
 function ballNear(S, p, mul) {
   const b = S.ball, s = psc(p), f = fdir(p);
   if (b.held || b.cap) return false;
-  const ck = ctl(S, p), reach = 96 * s * (chOf(p).id === 'jiae' ? 1.2 : chOf(p).id === 'snurse' ? 1.05 : 1) * roleK(p, 'reach') * mul * ck.reach * prsK(S, p);
+  const ck = ctl(S, p), reach = 96 * s * (chOf(p).id === 'jiae' ? 1.2 : chOf(p).id === 'snurse' ? 1.05 : 1) * roleK(p, 'reach') * mul * ck.reach * prsK(S, p) * (!p.bot && b.lastTeam >= 0 && b.lastTeam !== p.team ? RCV_K : 1);
   return Math.hypot(b.x - p.x - f * 10 * s, b.y - p.y + 56 * s, (b.z - p.z) * ck.zk) < reach; // 2.5D라 깊이를 맞추기 어렵다 → 깊이 차이는 덜 따진다
 }
 /* v0.60~0.61 온라인 전용: 내 캐릭터의 이동·점프·동작(받기·모으기·스파이크·블로킹·다이빙)을 화면에서 먼저 계산한다.
@@ -867,7 +870,7 @@ function predMove(S, p, inp, edge) {
       if (blk) { p.act = 'block'; p.actT = 0; } else { p.act = 'charge'; p.actT = 0; p.chg = 0; }
     }
   }
-  if (p.act === 'charge') { if (serving) { /* 서브 모으기는 서버만 */ } else if (inp & K.S) p.chg = Math.min(1, (p.chg || 0) + DT / 0.42); else { p.act = 'spike'; p.actT = 0; } }
+  if (p.act === 'charge') { if (serving) { /* 서브 모으기는 서버만 */ } else if (inp & K.S) p.chg = Math.min(1, (p.chg || 0) + DT / (p.bot ? 0.42 : SPK_CHG)); else { p.act = 'spike'; p.actT = 0; } }
   else if (p.act !== 'idle') { p.actT += DT; const dur = p.act === 'bump' ? 0.32 : p.act === 'spike' ? 0.36 : p.act === 'super' ? 0.55 : p.act === 'dive' ? (S.env.sand ? 0.62 : 0.82) : 9; if (p.actT >= dur) { p.act = 'idle'; p.actT = 0; } }
 }
 function stepPlayer(S, p) {
@@ -1037,8 +1040,8 @@ function stepPlayer(S, p) {
       p.sDist = ds;
     }
     if (hold) {
-      if (p.chg < 1) { p.chg = Math.min(1, p.chg + DT / (serving ? 0.7 : 0.42)); if (p.chg >= 1) ev(S, 'full', p.x, p.y - 70, p.z, p.i); }
-      else { p.chgHold += DT; if (p.chgHold > 0.9) { p.chg = 0.3; p.chgHold = 0; ev(S, 'txt', p.x, p.y - 150, p.z, '힘 빠짐…', 2); } }
+      if (p.chg < 1) { p.chg = Math.min(1, p.chg + DT / (serving ? 0.7 : p.bot ? 0.42 : SPK_CHG)); if (p.chg >= 1) ev(S, 'full', p.x, p.y - 70, p.z, p.i); }
+      else { p.chgHold += DT; if (p.chgHold > (serving || p.bot ? 0.9 : SPK_HOLD)) { p.chg = 0.3; p.chgHold = 0; ev(S, 'txt', p.x, p.y - 150, p.z, '힘 빠짐…', 2); } }
     } else if (serving) doServe(S, p, true, inp, p.chg);
     else { p.pw = 0.76 + 0.52 * p.chg; p.act = 'spike'; p.actT = 0; p.hitDone = false; }
   } else if (p.act !== 'idle') {
@@ -1057,7 +1060,7 @@ function contacts(S) {
     const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap || (S.netLive && S.netLive.mode && !S.netLive.done)) return; /* v0.56 네트가 움직이는 중엔 결과가 정해진 공 */
     if (p.hitCd > 0 || p.gone) continue;
     if (b.lastTeam === p.team && b.teamCd > 0) continue;
-    const ck = ctl(S, p), s = psc(p), f = fdir(p), c = chOf(p), rm = (c.id === 'jiae' ? 1.2 : c.id === 'snurse' ? 1.05 : 1) * roleK(p, 'reach') * ck.reach * prsK(S, p) * (S.rallyHits === 0 && b.lastTeam !== p.team ? (b.ultra ? 1 : 1.12) : 1) * (p.ck || 1);
+    const ck = ctl(S, p), s = psc(p), f = fdir(p), c = chOf(p), rm = (c.id === 'jiae' ? 1.2 : c.id === 'snurse' ? 1.05 : 1) * roleK(p, 'reach') * ck.reach * prsK(S, p) * (S.rallyHits === 0 && b.lastTeam !== p.team ? (b.ultra ? 1 : 1.12) : 1) * (p.ck || 1) * (!p.bot && b.lastTeam >= 0 && b.lastTeam !== p.team ? RCV_K : 1);
     const lg = !p.bot && p.lagT > 0 ? Math.min(12, p.lagT | 0) : 0, hb = lg ? S.bh[(S.bhI - lg) & 15] : null, vb = hb && hb.ser === b.serial ? hb : b; // v0.61 그 사람 화면에 보이던 공 위치(최대 0.2초 전, 그 사이 공을 누가 쳤으면 지금 위치)
     const dist = (x, y, z) => Math.hypot(vb.x - x, vb.y - y, (vb.z - z) * ck.zk), bodyD = d3(b.x, b.y, b.z, p.x, p.y - 46 * s, p.z);
     if (!busy(p)) {
