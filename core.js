@@ -93,7 +93,7 @@ const CATN = { atk: '공격형', dis: '방해형', def: '수비형' }, BEATS = {
 for (const c of CHARS) c.cat = SCAT[c.id];
 const DIFFS = {
   easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5, counter: 0, dig: 0 },
-  normal: { name: '보통',   react: 0.23, err: 20, block: 0.3,  dive: 0.55, perf: 0.1,  two: 0.14, sup: 0.8, chg: 0.55, miss: 0.22, counter: 0.3, dig: 0.25 }, // v1.16 더 어렵게(전: react 0.27 err 24 block 0.27 dive 0.45 perf 0.08 two 0.12 chg 0.5 miss 0.3 counter 0.25)
+  normal: { name: '보통',   react: 0.25, err: 22, block: 0.28, dive: 0.5,  perf: 0.09, two: 0.13, sup: 0.8, chg: 0.52, miss: 0.26, counter: 0.27, dig: 0.22 }, // v1.30 살짝 쉽게(v1.16 값과 그 전 값의 중간쯤: react 0.23 err 20 block 0.3 dive 0.55 perf 0.1 two 0.14 chg 0.55 miss 0.22 counter 0.3 dig 0.25) // v1.16 더 어렵게(전: react 0.27 err 24 block 0.27 dive 0.45 perf 0.08 two 0.12 chg 0.5 miss 0.3 counter 0.25)
   hard:   { name: '어려움', react: 0.12, err: 7,  block: 0.5,  dive: 0.88, perf: 0.3,  two: 0.34, sup: 1,   chg: 1,   miss: 0.08, counter: 0.7, dig: 0.45 }, // v1.16 더 어렵게(전: react 0.15 err 9 block 0.45 dive 0.8 perf 0.25 two 0.3 miss 0.12 counter 0.6)
   hell:   { name: '지옥',   react: 0.07, err: 3,  block: 0.6,  dive: 0.95, perf: 0.45, two: 0.45, sup: 1,   chg: 1,   miss: 0.04, counter: 0.9, dig: 0.6 }, // v1.06 가장 어려움: 반응·정확도·블로킹·빈자리 공격 최상
 };
@@ -546,7 +546,7 @@ function hitBody(S, p) {
   if (s.down > 0 && c.id === 'bbabjji' && !p.ko && Math.random() < 0.5) { /* v0.50 바둥바둥 리시브는 절반 확률 */ lob(S, b, netD(T, 200) + rnd(-50, 50), p.z + rnd(-40, 40), GY - 240, GY - 430); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 1); ev(S, 'txt', p.x, p.y - 90, p.z, '바둥바둥 리시브!', 1); return; }
   if (strong && c.id === 'bami' && s.down <= 0) { lob(S, b, netD(T, 170) + rnd(-25, 25), (p.z + ZD / 2) / 2, GY - 240, GY - 450); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 3); ev(S, 'txt', p.x, p.y - 150, p.z, '밤송이 헤딩!', 1); p.stats.rcv++; return; }
   if (strong && c.id === 'darai' && s.down <= 0) { s.stun = Math.max(s.stun, 0.45); lob(S, b, netD(T, 190) + rnd(-60, 60), p.z + rnd(-50, 50), GY - 240, GY - 420); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '텅!', 2); S.stopT = 0.08; return; }
-  if (strong && p.bot && s.down <= 0 && s.frozen <= 0 && v <= 1150 && Math.random() < (DIFFS[S.diff] || DIFFS.normal).dig) { lob(S, b, netD(T, 190) + rnd(-60, 60), p.z + rnd(-50, 50), GY - 230, GY - 420); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '디그!', 1); p.stats.rcv++; return; } // v1.16 PC 강타 받아 내기(보통 25%·어려움 45%·지옥 60%)
+  if (strong && p.bot && s.down <= 0 && s.frozen <= 0 && v <= 1150 && Math.random() < aiDf(S).dig) { lob(S, b, netD(T, 190) + rnd(-60, 60), p.z + rnd(-50, 50), GY - 230, GY - 420); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '디그!', 1); p.stats.rcv++; return; } // v1.16 PC 강타 받아 내기(보통 25%·어려움 45%·지옥 60%)
   if (strong && s.down <= 0 && s.frozen <= 0 && v <= 1150 && roleOf(p) === 'libero' && Math.random() < roleK(p, 'tough')) { lob(S, b, netD(T, 190) + rnd(-50, 50), p.z + rnd(-40, 40), GY - 240, GY - 440); b.power = false; ev(S, 'bump', b.x, b.y, b.z, 2); ev(S, 'txt', p.x, p.y - 150, p.z, '리베로 디그!', 1); p.stats.rcv++; addGauge(p, 6); return; } // v0.98 리베로: 강타를 절반 확률로 버텨 낸다
   if (strong && s.down <= 0 && s.frozen <= 0) {
     S.stopT = 0.13; ev(S, 'hit', b.x, b.y, b.z, 3, p.i);
@@ -573,7 +573,7 @@ function clashScan(S) { // 상대 컷인이 뜬 동안 D를 누르면(PC는 이�
   for (const q of S.players) {
     if (q.team === A.team || q.gauge < 100 || supLocked(q) || q.ko) continue;
     let go = false;
-    if (q.bot) { if (!cut.botChk) go = BEATS[chOf(q).cat] === chOf(A).cat && Math.random() < (DIFFS[S.diff] || DIFFS.normal).counter; }
+    if (q.bot) { if (!cut.botChk) go = BEATS[chOf(q).cat] === chOf(A).cat && Math.random() < aiDf(S).counter; }
     else go = !!(q.inp & K.X) && !(q.prev & K.X);
     if (!go) continue;
     q.prev |= K.X; const ca = chOf(A).cat, cb = chOf(q).cat;
@@ -1011,7 +1011,7 @@ function stepPlayer(S, p) {
   const canAct = !noCtl && !jumped && (p.act === 'idle' || p.act === 'charge' || (p.act !== 'dive' && p.actT > 0.2));
   if (canAct && (S.phase === 'rally' || serving)) {
     const pk = S.ball.lastTeam >= 0 && S.ball.lastTeam !== p.team ? 1.45 - 0.75 * (S.ball.prs || 0) : 1; // 약한 공은 나이스 타이밍이 넉넉, 강한 공은 짧다
-    const pr2 = p.bot ? Math.random() : p.inReach / (ck.perf * pk || 1), pf = p.bot ? pr2 < DIFFS[S.diff].perf * pk : pr2 <= 1; p.pfK = p.bot ? pr2 / (DIFFS[S.diff].perf * pk || 1) : pr2; // pfK: 나이스 창 안에서 얼마나 일찍 눌렀나(0~1)
+    const pr2 = p.bot ? Math.random() : p.inReach / (ck.perf * pk || 1), pf = p.bot ? pr2 < aiDf(S).perf * pk : pr2 <= 1; p.pfK = p.bot ? pr2 / (aiDf(S).perf * pk || 1) : pr2; // pfK: 나이스 창 안에서 얼마나 일찍 눌렀나(0~1)
     const b = S.ball;
     let press = edge;
     if (p.bufA > 0) { press |= K.A; p.bufA = 0; }
@@ -1156,7 +1156,7 @@ function intercept(S, p, pr, mode) {
   return null;
 }
 function aiTeam(S, team, pr) {
-  const b = S.ball, D = DIFFS[S.diff], Tm = S.teamAI[team];
+  const b = S.ball, D = aiDf(S), Tm = S.teamAI[team];
   Tm.bz = Tm.bz == null ? b.z : Tm.bz + (b.z - Tm.bz) * Math.min(1, DT * 3.5); // 블로커가 보는 공 깊이(약 0.3초 늦게 따라감)
   const mine = S.players.filter(p => p.team === team), opp = S.players.filter(p => p.team !== team);
   const n = b.lastTeam === team ? b.touches : 0;
@@ -1236,7 +1236,7 @@ function aiTeam(S, team, pr) {
           if (inR || p.act === 'spike') { // 코스 선택
             inp &= ~15;
             let px = Tm.tac < 0.45 ? 0 : Tm.tac < 0.75 ? 1 : 2, pz = Tm.tacZ < 0.4 ? 0 : Tm.tacZ < 0.7 ? 1 : 2;
-            if (S.diff === 'hard' || S.diff === 'hell') {
+            if (aiD(S) === 'hard' || aiD(S) === 'hell') {
               let bd = -1;
               for (let ix = 0; ix < 3; ix++) for (let iz = 0; iz < 3; iz++) {
                 const x = oppD(team, [350, 525, 185][ix]), z = [p.z, ZD * 0.18, ZD * 0.82][iz];
@@ -1457,7 +1457,7 @@ function forceSup(S, i) { const p = S.players[i]; if (p.gauge >= 100 && S.phase 
    1 예고 스파이크(가짜 원) 2 멀티볼(황금 공만 진짜) 3 브레이크(기 모으기 중 2점 내면 그로기) 4 졸개(빚쟁이 쥐: 밟거나 공·다이빙으로 쫓아냄)
    5 통장 압류(모두 동시에 점프) 6 색깔 방패(같은 색 발판을 밟은 사람의 공만 방패를 깬다) 7 무적+치즈 구슬 8 코트 변형(빙판·철망)
    9 바닥 휩쓸기(점프로 피함) 10 카운터(번쩍일 때 블로킹하면 튕겨내기) 11 저주(방향키 반대·어둠) 12 발악(1%) */
-const BOSSES = { dark: { name: '다크 빱찌', title: '통장 털이 서큐보스', hp: 10000, hearts: 7, limit: 330 } };
+const BOSSES = { dark: { name: '다크 빱찌', title: '통장 털이 서큐보스', hp: 10000, hearts: 9, limit: 330 } };
 const BOSS_KINDS = { 1: [['lob', 30], ['spike', 45], ['tele', 15], ['multi', 10]], 2: [['lob', 20], ['spike', 45], ['tele', 20], ['multi', 15]], 3: [['lob', 10], ['spike', 45], ['tele', 25], ['multi', 20]], rage: [['spike', 40], ['tele', 30], ['multi', 30]] };
 const BOSS_CD = { summon: 26, sweep: 13, curse: 24, court: 26, charge: 34, shield: 40 };
 const BOSS_DIFF = { easy: 0.75, normal: 1, hard: 1.15, hell: 1.3 };
@@ -1465,7 +1465,7 @@ function pickW(list) { let s = 0; for (const q of list) s += q[1]; let r = Math.
 function bossInit(S, id) {
   const D = BOSSES[id] || BOSSES.dark;
   S.boss = { id: BOSSES[id] ? id : 'dark', hp: D.hp, hpMax: D.hp, hearts: D.hearts, heartsMax: D.hearts, ph: 1, st: 'idle', stT: 0, x: oppD(0, 420), z: ZD / 2, clock: 0, limit: D.limit,
-    recvSer: -1, recvOk: false, hold: null, marks: [], fakes: [], rats: [], ratT: 0, groggy: 0, charge: null, shield: null, orbs: null, orbT: 0, imm: false, cage: 0, dark: 0, sweep: null, cwSer: -1,
+    recvSer: -1, recvOk: false, hold: null, marks: [], fakes: [], mets: [], metT: 0, rats: [], ratT: 0, groggy: 0, charge: null, shield: null, orbs: null, orbT: 0, imm: false, cage: 0, dark: 0, sweep: null, cwSer: -1,
     evq: [], ev: null, done: {}, cd: { summon: 10, sweep: 7, curse: 0, court: 0, charge: 0, shield: 0 }, rage: null, exh: false, dead: false, serveNext: false, lastKind: '', dmgN: 0 };
   for (const p of S.players) p.bcol = p.slot % 2; // 6 색깔 방패: 처음 색(빨강 0 / 파랑 1)
 }
@@ -1473,12 +1473,15 @@ function bossHome(S) { return [oppD(0, 400), ZD / 2]; }
 function bossHand(S) { const B = S.boss; return [B.x - 46 * XS, GY - 330, B.z]; }
 function bossSay(S, s, col) { ev(S, 'txt', S.boss.x, GY - 470, S.boss.z, s, col == null ? 3 : col, 1); }
 function bossSt(B, st) { if (B.st !== st) { B.st = st; B.stT = 0; } }
+function aiD(S) { return S.boss ? 'normal' : S.diff; } // v1.29 보스전에서 난이도는 보스만 바꾼다(우리 편 PC는 늘 보통 실력)
+const BOSS_ALLY = { react: 0.23, err: 20, block: 0.3, dive: 0.55, perf: 0.1, two: 0.14, sup: 0.8, chg: 0.55, miss: 0.22, counter: 0.3, dig: 0.25 }; // v1.30 보스전 우리 편 PC 실력은 v1.29 보통 그대로(일반 대전 보통만 쉬워짐)
+function aiDf(S) { return S.boss ? BOSS_ALLY : (DIFFS[S.diff] || DIFFS.normal); }
 function bossRecvChance(S) {
-  const B = S.boss, b = S.ball, base = B.rage ? 0.6 : [0, 0.42, 0.47, 0.52][B.ph];
+  const B = S.boss, b = S.ball, base = B.rage ? 0.82 : [0, 0.72, 0.76, 0.8][B.ph]; // v1.29 보스가 리시브를 더 잘한다(전 0.42·0.47·0.52)
   if (b.sup || B.groggy > 0 || B.exh || B.charge || b.parry || S.ufo) return 0;
-  let k = base * (b.power ? 0.6 : 1) * (b.ultra ? 0.8 : 1) * (B.shield ? 0.8 : 1) * (BOSS_DIFF[S.diff] || 1);
-  const L = S.pred && S.pred.land; if (L && Math.hypot(L.x - B.x, (L.z - B.z) * 1.3) > 380 * XS) k *= 0.7;
-  return clamp(k, 0, 0.9);
+  let k = base * (b.power ? 0.85 : 1) * (b.ultra ? 0.9 : 1) * (B.shield ? 0.85 : 1) * (BOSS_DIFF[S.diff] || 1);
+  const L = S.pred && S.pred.land; if (L && Math.hypot(L.x - B.x, (L.z - B.z) * 1.3) > 380 * XS) k *= 0.85;
+  return clamp(k, 0, 0.93);
 }
 function bossServeStart(S) { // 우리가 점수를 잃었으면 다음 공은 보스가 친다
   const B = S.boss, b = S.ball; if (!B.serveNext) return;
@@ -1557,9 +1560,9 @@ function bossStep(S) {
   // 보스 이동: 공이 우리 쪽에서 넘어오면 떨어질 곳으로, 아니면 제자리
   { let tx, tz; const L = S.pred && S.pred.land, inc = live && !b.held && b.lastTeam === 0 && !B.hold;
     if (B.groggy > 0 || B.exh || B.charge) { const h = bossHome(S); tx = h[0]; tz = h[1]; }
-    else if (inc && L && L.x > NETX) { tx = L.x + 30 * XS; tz = L.z; } else if (B.hold) { tx = B.x; tz = B.z; } else { const h = bossHome(S); tx = h[0]; tz = h[1]; }
+    else if (inc && L && L.x > NETX) { tx = L.x + 30 * XS; tz = L.z; } else if (B.hold) { tx = B.x; tz = B.z; } else { const h = bossHome(S), r = B.rage ? 1 : 0; tx = h[0] + Math.sin(B.clock * (1.2 + r * 0.7)) * (120 + r * 50) * XS; tz = h[1] + Math.sin(B.clock * (0.85 + r * 0.45) + 1) * ZD * (0.22 + r * 0.08); } // v1.30 가만히 서 있지 않고 늘 이리저리 떠다닌다(발악 때 더 크게·빠르게)
     tx = clamp(tx, NETX + 150 * XS, CW - 90 * XS); tz = clamp(tz, ZD * 0.18, ZD * 0.82);
-    const sp = (inc ? 900 : 380) * XS * DT, dx = tx - B.x, dz = tz - B.z, d = Math.hypot(dx, dz); if (d > 1) { const m = Math.min(1, sp / d); B.x += dx * m; B.z += dz * m; }
+    const sp = (inc ? 950 : B.rage ? 640 : 480) * XS * DT, dx = tx - B.x, dz = tz - B.z, d = Math.hypot(dx, dz); if (d > 1) { const m = Math.min(1, sp / d); B.x += dx * m; B.z += dz * m; }
     if (!B.hold && !B.groggy && !B.exh && !B.charge && !B.shield && B.stT > 0.9 && ['spike', 'toss', 'cast', 'summon', 'sweep', 'taunt', 'flinch', 'wind'].includes(B.st)) bossSt(B, d > 40 ? 'move' : 'idle');
     if (B.st === 'idle' && d > 40) bossSt(B, 'move'); if (B.st === 'move' && d <= 40) bossSt(B, 'idle'); }
   if (B.charge && live) { B.charge.t -= DT; bossSt(B, 'charge'); if (B.charge.t <= 0) { B.charge = null; bossSay(S, '암흑 대포 발사!!'); if (!b.held && !B.hold && b.lastTeam === 1 && sideOf(b.x) === 0) { /* 공이 우리 쪽이면 바로 발사 */ } B.cannon = true; } }
@@ -1570,7 +1573,14 @@ function bossStep(S) {
     if (B.orbs.every(o => o.dead)) { B.orbs = null; B.imm = false; B.groggy = 6; bossSt(B, 'groggy'); ev(S, 'bossOrbDone', B.x, GY - 300, B.z); bossSay(S, '내 방패가…!!', 2); }
     else if (B.orbT <= 0) { B.orbs = null; B.imm = false; ev(S, 'bossBlast', NETX, GY, ZD / 2); bossLoseHeart(S, 1, '마력 폭발!'); for (const q of S.players) if (!q.ko) knock(S, q, 0.8, -1); }
   }
-  if (B.rage && live) { B.rage.t -= DT; if (B.rage.t <= 0) { B.rage = null; B.imm = false; B.exh = true; B.dark = 0; bossSt(B, 'groggy'); ev(S, 'bossExh', B.x, GY - 300, B.z); bossSay(S, '헉… 헉… 힘이 없어…', 2); } }
+  if (B.rage && live) { // v1.29 발악: 가만히 있지 않고 2~3초마다 우리 선수 발밑에 암흑 운석을 떨어뜨린다(빨간 원이 뜨고 1.1초 뒤 쾅)
+    B.metT -= DT; if (B.metT <= 0) { B.metT = rnd(2.4, 3.2); const al = S.players.filter(q => !q.ko), n = Math.min(al.length, Math.random() < 0.6 ? 1 : 2);
+      for (let i = 0; i < n; i++) { const q = al[(i + S.tick) % al.length]; B.mets.push({ x: clamp(q.x + rnd(-50, 50) * XS, 40 * XS, NETX - 40 * XS), z: clamp(q.z + rnd(-40, 40), 25, ZD - 25), t: 1.1 }); }
+      bossSt(B, Math.random() < 0.5 ? 'cast' : 'roar'); ev(S, 'bossMeteor', B.x, GY - 300, B.z, n); } }
+  if (B.mets.length) { for (const m of B.mets) { m.t -= DT; if (m.t <= 0 && !m.hit) { m.hit = 1; ev(S, 'bossMetHit', m.x, GY, m.z);
+        for (const q of S.players) if (!q.ko && q.st.down <= 0 && Math.hypot(q.x - m.x, (q.z - m.z) * 1.3) < 70 * XS && q.y > GY - 70) { knock(S, q, 0.7, -1); hurt(S, q, 6); ev(S, 'txt', q.x, q.y - 160, q.z, '쾅!', 2); } } }
+    B.mets = B.mets.filter(m => m.t > -0.4); }
+  if (B.rage && live) { B.rage.t -= DT; if (B.rage.t <= 0) { B.rage = null; B.mets = []; B.imm = false; B.exh = true; B.dark = 0; bossSt(B, 'groggy'); ev(S, 'bossExh', B.x, GY - 300, B.z); bossSay(S, '헉… 헉… 힘이 없어…', 2); } }
   // 9 바닥 휩쓸기
   if (B.sweep && (live || S.phase === 'point')) { const W2 = B.sweep; if (W2.warn > 0) W2.warn -= DT; else { W2.x -= W2.sp * DT;
       for (const q of S.players) if (!q.ko && !W2.hit[q.i] && Math.abs(q.x - W2.x) < 40 * XS && q.gnd && q.y > GY - 20 && q.st.down <= 0) { W2.hit[q.i] = 1; knock(S, q, 0.9, -1); hurt(S, q, 8); ev(S, 'txt', q.x, q.y - 160, q.z, '휩쓸렸다!', 2); }
@@ -1626,7 +1636,7 @@ function bossPoint(S, team, scorer) { // point() 대신
     if (B.shield) { const ok = sc && sc.bcol === B.shield.col; if (ok) { B.shield.hp--; ev(S, 'bossShieldHit', B.x, GY - 250, B.z, B.shield.hp); if (B.shield.hp <= 0) { B.shield = null; B.groggy = Math.max(B.groggy, 4); bossSt(B, 'groggy'); ev(S, 'bossShieldBreak', B.x, GY - 250, B.z); bossSay(S, '방패가 깨졌어?!', 2); } else { B.shield.col = 1 - B.shield.col; ev(S, 'bossShield', B.x, GY - 250, B.z, B.shield.col); } } else ev(S, 'txt', B.x, GY - 420, B.z, sc ? '색이 달라! (발판을 밟아 색 바꾸기)' : '방패에 막혔다', 0, 1); }
     else if (B.imm && !B.exh) ev(S, 'txt', B.x, GY - 420, B.z, B.orbs ? '무적! 치즈 구슬을 공으로 깨!' : '무적!', 0, 1);
     else { // 데미지
-      let d = 480 + (b.power ? 140 : 0) + (b.ultra ? 180 : 0) + (b.sup ? 450 : 0), crit = false;
+      let d = 660 + (b.power ? 140 : 0) + (b.ultra ? 180 : 0) + (b.sup ? 450 : 0), crit = false;
       if (b.power && Math.random() < 0.18) { d *= 1.8; crit = true; }
       if (B.groggy > 0 || B.exh) d *= 2; if (b.parry) d *= 1.5;
       d = Math.round(d * rnd(0.92, 1.08));
@@ -1651,7 +1661,7 @@ function bossAfterPoint(S) { // 점수 연출이 끝난 뒤: 대기 중인 보�
 function bossEvStart(S, k) {
   const B = S.boss, b = S.ball; S.phase = 'bossev'; S.phaseT = 0; B.ev = { k, t: 0, dur: { tf: 2.8, seize: 5.6, orb: 2.4, rage: 2.6, doom: 4.2 }[k] || 2, done: 0 };
   b.held = true; b.x = -999; b.vx = b.vy = b.vz = 0; B.hold = null; B.marks = []; B.fakes = []; B.sweep = null;
-  for (const q of S.players) { q.act = 'idle'; q.chg = 0; q.jt = k === 'seize' ? 5.0 - 0.26 + rnd(-1, 1) * ({ easy: 0.24, normal: 0.17, hard: 0.11, hell: 0.07 }[S.diff] || 0.17) : 99; }
+  for (const q of S.players) { q.act = 'idle'; q.chg = 0; q.jt = k === 'seize' ? 5.0 - 0.26 + rnd(-1, 1) * ({ easy: 0.24, normal: 0.17, hard: 0.11, hell: 0.07 }[aiD(S)] || 0.17) : 99; }
   if (k === 'tf') { B.ph = 2; bossSt(B, 'tf'); ev(S, 'bossTf', B.x, GY - 300, B.z, 2); bossSay(S, '이제부터 진짜야!!', 2); }
   else if (k === 'seize') { bossSt(B, 'roar'); ev(S, 'bossSeize', netD(0, 330), GY, ZD / 2, 5); bossSay(S, '통장 압류!!', 2); }
   else if (k === 'orb') { B.imm = true; B.charge = null; B.shield = null; B.orbs = []; B.orbT = 40; for (let i = 0; i < 3; i++) { const y0 = GY - rnd(190, 330); B.orbs.push({ x: oppD(0, 70 + i * 70 + rnd(-15, 15)), y: y0, y0, z: ZD * [0.3, 0.7, 0.5][i] + rnd(-20, 20), ph: rnd(0, 6.28), dead: false }); } bossSt(B, 'shield'); ev(S, 'bossOrbs', B.x, GY - 300, B.z, 3); bossSay(S, '무적이다~ 치즈 구슬을 깨 볼 테면 깨 봐!'); if (B.ph < 3) B.ph = 3; }
@@ -1671,7 +1681,8 @@ function bossBots(S) { // PC 팀원의 보스전 행동(졸개 밟기·휩쓸기
   const B = S.boss, b = S.ball; if (S.phase !== 'rally') return;
   const free = !b.held && (B.hold || (b.lastTeam === 0 && sideOf(b.x) === 1));
   for (const q of S.players) { if (!q.bot || q.ko || busy(q)) continue;
-    if (B.sweep && B.sweep.warn <= 0 && q.gnd && q.x - B.sweep.x > -10 && q.x - B.sweep.x < 95 * XS && Math.random() < ({ easy: 0.55, normal: 0.75, hard: 0.88, hell: 0.95 }[S.diff] || 0.75)) { q.inp = K.S; continue; }
+    { const m = B.mets.find(o => !o.hit && o.t < 0.95 && Math.hypot(q.x - o.x, (q.z - o.z) * 1.3) < 95 * XS); if (m && Math.random() < ({ easy: 0.5, normal: 0.7, hard: 0.85, hell: 0.95 }[aiD(S)] || 0.7)) { let i = 0; if (q.x >= m.x) i |= K.R; else i |= K.L; if (q.z >= m.z) i |= K.D; else i |= K.U; q.inp = i; continue; } } // 운석 피하기
+    if (B.sweep && B.sweep.warn <= 0 && q.gnd && q.x - B.sweep.x > -10 && q.x - B.sweep.x < 95 * XS && Math.random() < ({ easy: 0.55, normal: 0.75, hard: 0.88, hell: 0.95 }[aiD(S)] || 0.75)) { q.inp = K.S; continue; }
     if (!free) continue;
     const go = (x, z, jump) => { const dx = x - q.x, dz = z - q.z; let i = 0; if (dx > 14) i |= K.R; else if (dx < -14) i |= K.L; if (dz > 10) i |= K.D; else if (dz < -10) i |= K.U; if (jump && Math.hypot(dx, dz) < 70 * XS && q.gnd) i |= K.S; q.inp = i; };
     const r = B.rats.filter(o => !o.dead).sort((a, c) => Math.hypot(a.x - q.x, a.z - q.z) - Math.hypot(c.x - q.x, c.z - q.z))[0];
