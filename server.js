@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js');
 
-const SERVER_VER = '1.19'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.20'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -113,7 +113,7 @@ function onMsg(ws, m) {
   }
   else if (m.t === 'play') { // v0.97 관전 → 선수(로비에서는 언제든, 경기 중에는 PC 자리와 교체 1번)
     if (slotOf(room, ws.id) >= 0) return; const specs = room.cfg.specs || []; if (!specs.some(s => s.id === ws.id)) return;
-    const cfg = room.cfg, team = m.team === 0 || m.team === 1 ? m.team : -1, pick = () => { if (team >= 0) { for (let i = team * cfg.n; i < (team + 1) * cfg.n; i++) if (cfg.slots[i].kind === 'bot') return i; return -1; } return R.joinSlot(cfg); };
+    const cfg = room.cfg, team = m.team === 0 || m.team === 1 ? m.team : -1, pick = () => { if (cfg.boss && team === 1) return -1; /* v1.28 보스전은 우리 팀만 */ if (team >= 0) { for (let i = team * cfg.n; i < (team + 1) * cfg.n; i++) if (cfg.slots[i].kind === 'bot') return i; return -1; } return R.joinSlot(cfg); };
     if (room.S && room.over) return;
     if (room.S && room.swapUsed && room.swapUsed.has(ws.id)) return send(ws, { t: 'toast', m: '경기 중 참여는 한 번만 할 수 있어요' });
     const idx = pick(); if (idx < 0) return send(ws, { t: 'toast', m: team >= 0 ? '그 팀에는 PC 자리가 없어요' : '빈자리가 없어요' });
