@@ -100,6 +100,7 @@ const DIFFS = {
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const SPK_CHG = 0.6, SPK_HOLD = 0.5, SPK_POW = 1.0; // v1.16 강스파이크 어렵게(전: 힘 모으기 0.42초, 꽉 찬 뒤 0.9초 버팀, 힘 0.9 넘으면 강타)
 const RCV_K = 0.9; // v1.16 사람의 리시브(상대 공 받기) 손 닿는 거리 10% 줄임(모든 난이도)
+const AIR_K = 0.55, AIR_R = 200, DEP_K = 0.25, DEP_R = 140, DEP_AIR = 0.3, DIV_K = 0.5; // v1.22 자동 따라가기 더 약하게(공중 앞뒤 끌기는 ak의 30%; v1.21: 공중 0.8·260, 깊이 0.5·190·공중 0.65 / v1.20: 1.0·320, 0.62·230·0.8, 다이빙은 공 쪽으로 100%)
 const CTRLS = { // 조작 난이도
   easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.12, auto: true, buf: 0.18 } /* v1.16 perf 0.15→0.12, buf 0.22→0.18 */,
   normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.08, auto: false, buf: 0.14 } /* v1.16 perf 0.1→0.08, buf 0.18→0.14 */, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
@@ -817,17 +818,17 @@ function predMove(S, p, inp, edge) {
   if (serving) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
   const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc;
   if (aimAir) {
-    mx = mz = 0;
-    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < 320 * XS) {
+    const ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
+    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
       const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
-      mx = clamp((tx - p.x) / 30, -1, 1); mz = clamp((tz - p.z) / 24, -1, 1);
+      mx = clamp(ux * 0.7 + clamp((tx - p.x) / 30, -1, 1) * ak, -1, 1); mz = clamp(uz * 0.7 + clamp((tz - p.z) / 24, -1, 1) * ak * 0.3, -1, 1); /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
   if (!aimAir && ck.assist > 0 && !inc && !serving && p.act !== 'dive' && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
     const L = S.pred && S.pred.land; let tz = null;
-    if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < 230) tz = L.z; }
-    if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? 0.62 : 0.8) * ck.assist);
+    if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < DEP_R) tz = L.z; }
+    if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? DEP_K : DEP_AIR) * ck.assist);
   }
   if (p.act === 'dive') {
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 260 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
@@ -862,7 +863,7 @@ function predMove(S, p, inp, edge) {
       else if (p.gnd && (mx || mz) && !ballNear(S, p, 1.25)) {
         const v = Math.hypot(mx, mz), maxD = DIVE_LEN * roleK(p, 'dive') * (c.id === 'sene' ? 1.45 : 1) * (S.env.slip || ice ? 1.3 : 1), L = S.pred && S.pred.land;
         p.act = 'dive'; p.actT = 0; p.diveX = mx / v; p.diveZ = mz / v; p.diveX0 = p.x; p.diveZ0 = p.z; p.diveLen = maxD; p.chg = 0;
-        if (ck.assist > 0 && L && !b.held && !b.cap && sideOf(L.x) === p.team) { const dx = L.x - p.x, dz = L.z - p.z, dd = Math.hypot(dx, dz); if (dd > 1) { p.diveX = dx / dd; p.diveZ = dz / dd; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); } }
+        if (ck.assist > 0 && L && !b.held && !b.cap && sideOf(L.x) === p.team) { const dx = L.x - p.x, dz = L.z - p.z, dd = Math.hypot(dx, dz); if (dd > 1) { const ax = p.diveX * (1 - DIV_K) + dx / dd * DIV_K, az = p.diveZ * (1 - DIV_K) + dz / dd * DIV_K, al = Math.hypot(ax, az) || 1; p.diveX = ax / al; p.diveZ = az / al; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); } }
       }
       else { p.act = 'bump'; p.actT = 0; p.chg = 0; }
     } else if ((press & K.S) && p.act !== 'charge' && !p.gnd) {
@@ -917,10 +918,10 @@ function stepPlayer(S, p) {
   // 스파이크 조준: S로 뛰어 힘을 모으는(또는 휘두르는) 동안에는 공을 칠 자리로 저절로 날아가고, 방향키는 때릴 곳(상대 코트)만 고른다
   const aimAir = !p.bot && ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc && !reset && s.puppet <= 0 && s.wrap <= 0 && s.float <= 0;
   if (aimAir) {
-    mx = mz = 0; const b = S.ball;
-    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < 320 * XS) {
+    const b = S.ball, ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
+    if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
       const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
-      mx = clamp((tx - p.x) / 30, -1, 1); mz = clamp((tz - p.z) / 24, -1, 1);
+      mx = clamp(ux * 0.7 + clamp((tx - p.x) / 30, -1, 1) * ak, -1, 1); mz = clamp(uz * 0.7 + clamp((tz - p.z) / 24, -1, 1) * ak * 0.3, -1, 1); /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
@@ -928,9 +929,9 @@ function stepPlayer(S, p) {
     const b = S.ball, L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) {
       if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z;
-      else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < 230) tz = L.z;
+      else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < DEP_R) tz = L.z;
     }
-    if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? 0.62 : 0.8) * ck.assist);
+    if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? DEP_K : DEP_AIR) * ck.assist);
   }
   if (p.act === 'dive') { // 정해진 거리(diveLen)만큼만 미끄러진다
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 260 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
@@ -1019,7 +1020,7 @@ function stepPlayer(S, p) {
         const L = S.pred && S.pred.land; // 쉬움·보통: 공이 떨어질 곳으로 저절로 향하고, 그 자리를 지나치지 않는다
         if (!p.bot && ck.assist > 0 && L && !b.held && !b.cap && sideOf(L.x) === p.team) {
           const dx = L.x - p.x, dz = L.z - p.z, dd = Math.hypot(dx, dz);
-          if (dd > 1) { p.diveX = dx / dd; p.diveZ = dz / dd; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); }
+          if (dd > 1) { const ax = p.diveX * (1 - DIV_K) + dx / dd * DIV_K, az = p.diveZ * (1 - DIV_K) + dz / dd * DIV_K, al = Math.hypot(ax, az) || 1; p.diveX = ax / al; p.diveZ = az / al; p.diveLen = Math.min(maxD, Math.max(0, dd - 30)); } // v1.22 누른 방향과 반반
         }
         hurt(S, p, 3); ev(S, 'dive', p.x, GY, p.z);
       }
