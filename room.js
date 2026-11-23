@@ -20,7 +20,7 @@ function fixTeams(room) {
 }
 /* v0.63 같은 방에서 한 번 쓴 캐릭터는 그 사람이 다시 못 쓴다(room.used: 사람 id → 쓴 캐릭터 번호들). 15종을 다 쓰면 처음부터 다시 */
 function usedBy(room, id) { return (room.used && room.used[id]) || []; }
-function markUsed(room) { room.used = room.used || {}; const live = {}; for (const s of room.slots) if (s.kind === 'human') { let u = usedBy(room, s.id).filter(c => c !== s.ch); if (u.length >= RC.CHARS.length - 1) u = []; u.push(s.ch); live[s.id] = u; } for (const id in room.used) if (!live[id]) live[id] = room.used[id]; room.used = live; }
+function markUsed(room) { room.used = room.used || {}; const live = {}; for (const s of room.slots) if (s.kind === 'human') { live[s.id] = [s.ch]; } /* v1.32 바로 전 판에 쓴 캐릭터만 못 고른다(그 다음 판엔 다시 가능). 전: 쓴 캐릭터가 계속 쌓였다 */ for (const id in room.used) if (!live[id]) live[id] = room.used[id]; room.used = live; }
 function afterGame(room) { for (let i = 0; i < room.slots.length; i++) { const s = room.slots[i]; delete s.doped; delete s.dope; /* 도핑은 한 경기만 */ if (s.kind === 'human' && !s.rnd && usedBy(room, s.id).includes(s.ch)) s.ch = randCh(fixedCh(room, teamOf(room, i), i).concat(usedBy(room, s.id))); } } // 로비로 돌아오면 방금 쓴 캐릭터 대신 안 쓴 캐릭터로 바꿔 둔다
 function rollRoles(room) { // v0.98 PC는 팀에 비어 있는 역할을 맡는다(2대2: 스파이커·세터, 3대3: 스파이커·세터·리베로)
   for (const T of [0, 1]) { const idx = room.slots.map((s, i) => i).filter(i => teamOf(room, i) === T), pool = room.n >= 3 ? ['spiker', 'setter', 'libero'] : ['spiker', 'setter'];
