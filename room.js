@@ -101,7 +101,7 @@ function packBoss(S, r, f1, f2) { // v1.28 보스 상태 → 숫자 배열
   return [r(B.hp), B.hpMax, B.hearts, B.heartsMax, B.ph, BOSS_STS.indexOf(B.st), f1(B.stT), r(B.x), r(B.z), f1(B.clock), B.limit, f1(B.groggy), fl,
     B.charge ? [f1(B.charge.t), B.charge.need, B.charge.got] : 0, B.shield ? [B.shield.col, B.shield.hp] : 0, B.orbs ? [f1(B.orbT), ...B.orbs.flatMap(o => [r(o.x), r(o.y), r(o.z), o.dead ? 1 : 0])] : 0,
     f1(B.cage), f1(B.dark), B.sweep ? [r(B.sweep.x), f2(B.sweep.warn)] : 0, B.hold ? [f2(B.hold.t0), f2(B.hold.t)] : 0, B.ev ? [BOSS_EVS.indexOf(B.ev.k), f2(B.ev.t), B.ev.dur] : 0,
-    B.marks.flatMap(m => [r(m.x), r(m.z)]), B.fakes.flatMap(q => [r(q.x), r(q.y), r(q.z)]), B.rats.flatMap(q => [r(q.x), r(q.z), (q.k ? 1 : 0) | (q.dead ? 2 : 0) | (q.vx > 0 ? 4 : 0)]), f1(B.ratT), B.rage ? f1(B.rage.t) : 0, S.players.map(p => p.bcol | 0), B.id, (B.mets || []).flatMap(m => [r(m.x), r(m.z), f2(m.t)])];
+    B.marks.flatMap(m => [r(m.x), r(m.z)]), B.fakes.flatMap(q => [r(q.x), r(q.y), r(q.z)]), B.rats.flatMap(q => [r(q.x), r(q.z), (q.k ? 1 : 0) | (q.dead ? 2 : 0) | (q.vx > 0 ? 4 : 0)]), f1(B.ratT), B.rage ? Math.max(0.1, f1(B.rage.t)) : 0, /* v1.37 끝나기 직전 0으로 반올림돼 발악이 꺼져 보이던 것 */ S.players.map(p => p.bcol | 0), B.id, (B.mets || []).flatMap(m => [r(m.x), r(m.z), f2(m.t)])];
 }
 /* 작은 이진 묶음: 숫자를 글자로 적지 않고 1~3바이트로 담는다(작은 정수 1바이트, 그 밖의 정수·소수 한두 자리 3바이트).
    내용물 구조를 몰라도 되는 범용 방식이라 pack 이 바뀌어도 그대로 쓴다. */
