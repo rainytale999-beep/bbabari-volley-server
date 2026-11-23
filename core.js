@@ -23,22 +23,22 @@ const CHARS = [
     supName: '빱알이 우주선 호출', supDesc: '빱알이 우주선이 날아와 공을 납치한다. 상대 코트 위에서 "어디 떨굴까~" 하고 약 올리다가 냅다 수직 투하. 깔리면 납작해진다. 돌아가는 길에 상대 통장(필살 게이지)도 털어 간다. 떨어질 자리에서 나이스로 받아 내면 우주선이 폭파돼 3점 동안 필살기를 못 쓴다.',
     pasName: '바둥바둥', pasDesc: '넘어져도 금방 일어난다. 넘어진 채 바둥거리는 발에 공이 맞으면 가끔 그게 또 리시브가 된다.' },
   { id: 'goseum', name: '고슴도치', title: '빱알이 대장', spd: 2.5, jmp: 3, pow: 4.5, tec: 2.5, gut: 3, type: 'spike', sup: 'thorn',
-    supName: '엉덩이 추적 가시공', supDesc: '공에 가시와 성난 눈썹이 돋아나 가장 가까운 상대의 엉덩이를 끝까지 쫓아간다. 찔리면 "앗 따가!" 하며 엉덩이를 잡고 폴짝폴짝.',
+    supName: '엉덩이 추적 가시공', supDesc: '공에 가시와 성난 눈썹이 돋아나 가장 가까운 상대의 엉덩이를 끝까지 쫓아간다. 찔리면 "앗 따가!" 하며 엉덩이를 잡고 폴짝폴짝. 상대 바닥에도 가시가 깔린다(2점 동안).',
     pasName: '대장의 가시 장벽', pasDesc: '블로킹 범위가 넓고, 막은 공이 더 세게 튕겨 나간다.' },
   { id: 'barcode', name: '바코드', title: '걸어다니는 계산대', spd: 3, jmp: 2.5, pow: 3, tec: 5, gut: 3, type: 'spike', sup: 'bogo',
     supName: '삑! 2+1 행사', supDesc: '공이 세 개로 늘어난다. 진짜는 하나, 나머지 둘은 사은품 두루마리 휴지. 휴지를 받은 사람은 민망해서 굳는다. "행사 종료되었습니다."',
     pasName: '정밀 스캔', pasDesc: '토스와 리시브가 빗나가지 않는다. 우리 코트 낙하 지점에는 "여기!" 가격표까지 붙는다.' },
   { id: 'sene', name: '세네', title: '안테나 서너 개', spd: 4.5, jmp: 3, pow: 2.5, tec: 4, gut: 2.5, type: 'instant', sup: 'puppet',
-    supName: '리모컨 해킹', supDesc: '안테나로 상대 전원을 2점 동안 해킹한다. 상대는 세네가 움직이는 대로 거울처럼 따라 움직일 수밖에 없다. 세네가 점프하면 다 같이 점프한다.',
+    supName: '리모컨 해킹', supDesc: '안테나로 상대 전원을 2점 동안 해킹한다. 상대는 세네가 움직이는 대로 거울처럼 따라 움직일 수밖에 없다. 세네가 점프하면 다 같이 점프한다. (당한 쪽은 ← →를 번갈아 빠르게 누르면 풀린다)',
     pasName: '더듬이 감지', pasDesc: '다이빙 리시브 거리가 길다.' },
   { id: 'dalgareum', name: '달가름', title: '문워크 장인', spd: 3, jmp: 4.5, pow: 3.5, tec: 3.5, gut: 2.5, type: 'instant', sup: 'float',
-    supName: '달나라 관광', supDesc: '달을 반으로 쩍 갈라 상대 코트의 중력을 꺼 버린다. 상대 전원이 둥실 떠올라 허우적대고, 끝나면 엉덩방아를 찧는다.',
+    supName: '달나라 관광', supDesc: '달을 반으로 쩍 갈라 상대 코트의 중력을 꺼 버린다. 상대 전원이 둥실 떠올라 허우적대고, 끝나면 엉덩방아를 찧는다. (당한 쪽은 ← →를 번갈아 빠르게 누르면 일찍 내려온다)',
     pasName: '저중력 체질', pasDesc: '점프가 높고 체공 시간이 길다. 착지한 뒤 잠깐 빨라진다.' },
   { id: 'jiae', name: '지애수이시보', title: '리본 체조 국가대표(자칭)', spd: 3, jmp: 4, pow: 2, tec: 4, gut: 3, type: 'instant', sup: 'wrap',
     supName: '돌돌말이 김밥', supDesc: '리본으로 공 근처의 상대 둘을 김밥처럼 돌돌 만다. 말린 상대는 통통 튀는 것 말고는 아무것도 못 한다. (1:1이면 한 줄)',
     pasName: '리본 리치', pasDesc: '리시브·토스가 닿는 범위가 넓다.' },
   { id: 'bami', name: '밤이도', title: '밤송이 헬멧', spd: 2, jmp: 2.5, pow: 4, tec: 3, gut: 4, type: 'spike', sup: 'hot',
-    supName: '군밤 폭탄 돌리기', supDesc: '공이 심지 달린 군밤 폭탄이 된다. 4초 뒤 터지는데, 터질 때 공이 있는 쪽 코트 전원이 새까맣게 그을려 날아간다. 우리 쪽으로 돌아오면 우리가 터진다.',
+    supName: '군밤 폭탄 돌리기', supDesc: '공이 심지 달린 군밤 폭탄이 된다. 3초 뒤 터지는데, 터질 때 공이 있는 쪽 코트 전원이 새까맣게 그을려 날아간다. 우리 쪽으로 돌아오면 우리가 터진다.',
     pasName: '밤송이 헤딩', pasDesc: '강한 공을 머리로 맞아도 안 넘어진다. 오히려 머리로 받는 게 더 정확하다.' },
   { id: 'mandu', name: '만두의코고는소리', title: '자면서 배구하는 만두', spd: 2, jmp: 2.5, pow: 4.5, tec: 3, gut: 4, type: 'instant', sup: 'snore',
     supName: '드르렁 자장가', supDesc: '코 고는 소리로 상대 전원을 재운다. 공에 맞으면 콧물 풍선이 터지며 깬다. 문제는 본인도 잠깐 잔다는 것.',
@@ -48,7 +48,7 @@ const CHARS = [
     pasName: '쿨한 성격', pasDesc: '스턴·넘어짐 같은 상태 이상이 절반만 지속된다.' },
   // v0.38 신규 6명 (능력치 합 16)
   { id: 'chiwa', name: '만두', title: '덜덜 떠는 치와와', spd: 4.5, jmp: 4, pow: 2.5, tec: 3, gut: 3, type: 'instant', sup: 'giant',
-    supName: '거대 치와와 멍멍 펀치', supDesc: '펑! 하고 거대 치와와로 변신(7초). 짖을 때마다 화면이 흔들리고, 이때 스파이크는 받는 사람을 쓰러뜨리는 앞발 스파이크. 끝나면 "깨갱…" 하고 더 작게 쪼그라들어 덜덜 떤다.',
+    supName: '거대 치와와 멍멍 펀치', supDesc: '펑! 하고 거대 치와와로 변신(10초). 몸이 커지고 더 빠르고 높이 뛴다. 짖을 때마다 화면이 흔들리고, 이때 스파이크는 받는 사람을 쓰러뜨리는 앞발 스파이크. 끝나면 "깨갱…" 하고 더 작게 쪼그라들어 덜덜 떤다.',
     pasName: '덜덜 꼬마', pasDesc: '몸집이 작아 강한 공에 몸으로 맞는 판정이 작다.' },
   { id: 'mungbek', name: '멍베크', title: '흙땅콩 시바 모자', spd: 3.5, jmp: 3, pow: 3, tec: 3.5, gut: 3, type: 'instant', sup: 'net',
     supName: '춤추는 네트', supDesc: '네트에 눈·입·다리가 생겨 자리를 옮긴다. 우리가 토스하면 네트가 공 뒤로 달려가 공이 상대 코트에 떨어지고, 상대가 넘기려는 공은 네트가 마중 나가 막는다. (한 번 쓰면 끝, 최대 12초)',
@@ -63,7 +63,7 @@ const CHARS = [
     supName: '링거 대잔치', supDesc: '거대 주사기가 "뿅!" 날아와 우리 편 전원 체력 가득, 다른 우리 편 필살 게이지 절반 충전(본인은 0%), 상대편의 필살기 게이지 조금 감소, 3초 동안 "기운 펄펄!" 빨라진다.',
     pasName: '응급처치', pasDesc: '근처 우리 편이 넘어지면 빨리 일어난다. 랠리 사이 체력 회복 2배. 리시브가 닿는 범위가 조금 넓다.' },
   { id: 'darai', name: '다라이트', title: '고무 대야 수비대장', spd: 2.5, jmp: 3, pow: 2.5, tec: 3, gut: 4.5, type: 'instant', sup: 'basin',
-    supName: '고무 다라이 철벽', supDesc: '고무 다라이가 "텅!" 하고 우리 쪽 네트 위에 엎어져 다음 상대 공격 1번을 무조건 막는다. 그 뒤 다라이가 날아가 상대 한 명 머리에 씌워진다.',
+    supName: '고무 다라이 철벽', supDesc: '고무 다라이가 숨어서 기다리다가, 상대가 스파이크하면 휙 날아와 "퉁!" 하고 1번 무조건 막는다. 막은 다라이는 튕겨 나가 사라진다(20초 안에 공격이 없으면 그냥 사라짐).',
     pasName: '튼튼 다라이', pasDesc: '강한 공에 맞아도 넘어지지 않고 "텅!" 하며 잠깐 멈칫한다.' },
 ];
 const STAGES = [
@@ -95,6 +95,7 @@ const DIFFS = {
   easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5, counter: 0 },
   normal: { name: '보통',   react: 0.27, err: 24, block: 0.27, dive: 0.45, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5, miss: 0.3, counter: 0.25 },
   hard:   { name: '어려움', react: 0.15, err: 9,  block: 0.45,  dive: 0.8,  perf: 0.25, two: 0.3,  sup: 1,   chg: 1,   miss: 0.12, counter: 0.6 },
+  hell:   { name: '지옥',   react: 0.07, err: 3,  block: 0.6,  dive: 0.95, perf: 0.45, two: 0.45, sup: 1,   chg: 1,   miss: 0.04, counter: 0.9 }, // v1.06 가장 어려움: 반응·정확도·블로킹·빈자리 공격 최상
 };
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const CTRLS = { // 조작 난이도
@@ -127,7 +128,7 @@ function fat(p) { return 0.78 + 0.22 * clamp(p.hp, 0, 100) / 100; } // 체력이
 function tire(p, amt, mv) { if (p.ko || p.hp <= 10) return; p.hp = Math.max(10, p.hp - amt * (mv ? 1 : STA.act) * (0.97 + (3 - chOf(p).gut) * 0.09)); } // 움직이고 치는 데 드는 체력. 근성이 높으면 덜 지친다. 이것만으로는 10 아래로 안 내려간다
 function pSpeed(S, p) {
   const c = chOf(p), s = p.st;
-  return (385 + (c.spd - 3) * 14) * MOVE_K * roleK(p, 'spd') * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (s.moon > 0 ? 1.3 : 1) * (s.wet2 > 0 ? 0.7 : 1) * (p.ck || 1) * (S.env.slip ? 1 + 0.2 * (p.mom || 0) : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * fat(p) * (s.half > 0 ? 0.5 : 1) * (p.tis > 0 ? 0.7 : 1) * (s.boost > 0 ? 1.25 : 1) * (s.giant > 0 ? 0.92 : 1)
+  return (385 + (c.spd - 3) * 14) * MOVE_K * roleK(p, 'spd') * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (s.moon > 0 ? 1.3 : 1) * (s.giant > 0 ? 1.2 : 1) /* v1.15 거대 치와와는 빠르다 */ * (s.wet2 > 0 ? 0.7 : 1) * (p.ck || 1) * (S.env.slip ? 1 + 0.2 * (p.mom || 0) : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * fat(p) * (s.half > 0 ? 0.5 : 1) * (p.tis > 0 ? 0.7 : 1) * (s.boost > 0 ? 1.25 : 1) * (s.giant > 0 ? 0.92 : 1)
     * (c.id === 'mungbek' && S.ball && !S.ball.held && S.ball.lastTeam >= 0 && S.ball.lastTeam !== p.team ? 1.12 : 1);
 }
 function pGrav(S, p) { return GP * (p.act === 'block' && S.env.g < 1 ? 1 : S.env.g) * (chOf(p).id === 'dalgareum' ? 0.76 : 1) * (S.env.jelly ? 0.86 : 1); } // 과자 나라: 젤리 바닥이라 높이 뜬다
@@ -140,7 +141,7 @@ const RK = { libero: { reach: 1.4, rcv: 1.8, dive: 1.5, tough: 0.8, spk: 0.6, jm
 function roleK(p, k) { const r = RK[roleOf(p)]; return r && r[k] != null ? r[k] : 1; }
 function roleOf(p) { return p && p.role && ROLES[p.role] ? p.role : 'all'; }
 function powV(c) { return 1155 + (c.pow - 3) * 200; } // 파워 → 스파이크·강서브 공 속도(파워 3 = 예전과 같음)
-function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1); }
+function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1) * (p.st && p.st.giant > 0 ? 1.1 : 1); } // v1.15 거대 치와와는 더 높이
 function jumpH(S, p) { const v = jumpV(p); return v * v / (2 * pGrav(S, p)); }
 function ballG(S, b) { return GB * S.env.g * (b.float > 0 ? 0.5 : 1); }
 function heat(S) { return clamp(((S.rallyHits || 0) - 5) * 0.065, 0, 0.65); } // v0.38: 랠리가 길어지면 공이 빨라진다(6번째 터치부터 한 번에 +6.5%, 최대 +65%)
@@ -186,6 +187,12 @@ function swapSides(S) { // 코트 체인지: 두 팀이 좌우를 바꾼다(코�
   for (const p of S.players) { p.team = 1 - p.team; p.x = CW - p.x; p.vx = -p.vx; }
   for (const q of S.peels) q.x = CW - q.x; S.items.length = 0;
   if (S.thornF) { S.thornF.team = 1 - S.thornF.team; for (const q of S.thornF.pts) q[0] = CW - q[0]; }
+  /* v1.12 팀 번호로 기억하는 것들도 같이 바꾼다(전에는 코트 체인지 뒤 춤추는 네트·다라이·심판 뒤끝·떠블 사용 여부가 상대 팀 것이 됐다) */
+  if (S.netLive) { const L = S.netLive; L.team = 1 - L.team; L.dx = -L.dx; L.tx = -L.tx; }
+  if (S.basin) S.basin.team = 1 - S.basin.team;
+  if (S.ref && S.ref.team >= 0) S.ref.team = 1 - S.ref.team;
+  if (S.streak && S.streak.team >= 0) S.streak.team = 1 - S.streak.team;
+  if (S.dbl) { S.dbl.used = [S.dbl.used[1], S.dbl.used[0]]; if (S.dbl.on >= 0) S.dbl.on = 1 - S.dbl.on; }
   ev(S, 'swap', NETX, 300, ZD / 2);
 }
 function startServe(S) {
@@ -319,7 +326,7 @@ function touch(S, p, kind) {
   const b = S.ball;
   if (kind === 'block' || b.lastTeam !== p.team) { b.chain = 0; b.nice = 0; b.cpl = []; }
   if (kind === 'bump') { b.chain++; (b.cpl = b.cpl || []).push(p.i); } else { b.chain = 0; b.nice = 0; b.cpl = []; }
-  b.flt = 0;
+  b.flt = 0; b.lastKind = kind; // v1.12 마지막으로 친 방식(다라이는 공격만 막는다)
   b.quick = false;
   if (kind === 'block') { b.lastTeam = p.team; b.touches = 0; }
   else if (b.lastTeam === p.team) b.touches++; else { b.lastTeam = p.team; b.touches = 1; }
@@ -487,7 +494,7 @@ function hitSpike(S, p) {
   const tg = spikeTarget(S, p, d, acc), full = p.pw >= 1.26; b.full = !p.gnd && full;
   const duo = air && !S.tut && S.players.find(q => q !== p && q.team === p.team && !q.gnd && !q.ko && q.jumpAt != null && p.jumpAt != null && Math.abs(q.jumpAt - p.jumpAt) <= 0.3 && Math.hypot(q.x - p.x, q.z - p.z) < 260 * XS); // v0.95 합동 스파이크: 같은 팀 둘이 0.3초 안에 같이 뛰면 힘↑(게이지와 무관)
   if (duo) { mul *= 1.15; ev(S, 'duo', p.x, p.y, p.z, p.i, duo.i); ev(S, 'txt', (p.x + duo.x) / 2, p.y - 250, (p.z + duo.z) / 2, '합동 스파이크!!', 1, 1); }
-  const sp = powV(c) * fat(p) * roleK(p, 'spk') * (setB >= 0 ? roleK(S.players[setB], 'setb') : 1) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul * (p.st.giant > 0 ? 1.4 : 1) * (p.st.half > 0 ? 0.45 : 1) * (c.id === 'banban' && p.bw ? 1.1 : 1) * (chance ? 1.5 : 1) * (p.ck || 1);
+  const sp = powV(c) * fat(p) * roleK(p, 'spk') * (setB >= 0 ? roleK(S.players[setB], 'setb') : 1) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul * (p.st.giant > 0 ? 1.6 : 1) /* v1.15 1.4→1.6 */ * (p.st.half > 0 ? 0.45 : 1) * (c.id === 'banban' && p.bw ? 1.1 : 1) * (chance ? 1.5 : 1) * (p.ck || 1);
   b.home = 0;
   drive(S, b, tg.x, tg.z, GY - BR, sp); b.power = !p.gnd && p.pw > 0.9;
   if (!b.sup && !(p.st.giant > 0) && !S.tut) { // v0.41 스파이크 아웃: 힘·기술·조준 칸(끝·옆줄)·타이밍(손에서 먼 곳)·랠리 과열로 늘고, 연결 공격이면 줄어든다
@@ -598,13 +605,13 @@ function applyInstant(S, p) {
     ev(S, 'ufo', b.x, b.y, b.z, p.team);
     return;
   }
-  if (c.sup === 'puppet') { for (const q of opp) { q.st.puppet = 30; q.pupN = cool(q) < 1 ? 1 : 2; q.pupBy = p.i; q.act = 'idle'; q.chg = 0; ev(S, 'jam', q.x, q.y - 100, q.z); } }
-  else if (c.sup === 'float') { for (const q of opp) { q.st.float = 3.0 * cool(q); q.act = 'idle'; q.chg = 0; if (q.gnd) { q.gnd = false; q.vy = -200; } } ev(S, 'float', oppD(p.team, 300), GY - 200, ZD / 2, p.team); }
+  if (c.sup === 'puppet') { for (const q of opp) { q.st.puppet = 30; q.pupN = cool(q) < 1 ? 1 : 2; q.pupBy = p.i; q.act = 'idle'; q.chg = 0; q.shk = 0; ev(S, 'jam', q.x, q.y - 100, q.z); if (!q.bot) ev(S, 'txt', q.x, q.y - 190, q.z, '← → 빠르게 번갈아 눌러 풀기!', 2); } }
+  else if (c.sup === 'float') { for (const q of opp) { q.st.float = 3.0 * cool(q); q.act = 'idle'; q.chg = 0; q.shk = 0; if (q.gnd) { q.gnd = false; q.vy = -200; } if (!q.bot) ev(S, 'txt', q.x, q.y - 190, q.z, '← → 빠르게 번갈아 눌러 내려오기!', 2); } ev(S, 'float', oppD(p.team, 300), GY - 200, ZD / 2, p.team); }
   else if (c.sup === 'wrap') {
     opp.sort((a, q) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(q.x - b.x, q.z - b.z));
     for (const q of opp.slice(0, 2)) { q.st.wrap = 2.5 * cool(q); q.act = 'idle'; q.chg = 0; ev(S, 'wrap', q.x, q.y - 50, q.z); }
   } else if (c.sup === 'giant') {
-    p.st.giant = 7; p.st.shrink = 0; ev(S, 'giant', p.x, p.y - 100, p.z, p.i); ev(S, 'txt', p.x, p.y - 300, p.z, '멍멍!!', 3, 1); ev(S, 'shake', p.x, p.y, p.z, 2);
+    p.st.giant = 10; p.st.shrink = 0; /* v1.15 7초→10초 */ ev(S, 'giant', p.x, p.y - 100, p.z, p.i); ev(S, 'txt', p.x, p.y - 300, p.z, '멍멍!!', 3, 1); ev(S, 'shake', p.x, p.y, p.z, 2);
   } else if (c.sup === 'net') {
     S.netLive = { team: p.team, t: 12, by: p.i, dx: 0, tx: 0, mode: 0 }; /* v0.56 mode 1=우리 토스를 따라 우리 쪽으로 이동, 2=상대 공격을 마중 나가 상대 쪽으로 이동 */ ev(S, 'netlive', NETX, NETTOP, ZD / 2, p.team); ev(S, 'txt', NETX, NETTOP - 120, ZD / 2, '네트가 살아났다!', 1, 1);
   } else if (c.sup === 'half') {
@@ -613,7 +620,7 @@ function applyInstant(S, p) {
     for (const q of S.players) if (q.team === p.team) { q.hp = 100; if (q.ko) { q.ko = false; q.st.down = 0; } if (q !== p && chOf(q).sup !== 'heal') { q.supCap = (q.supCap || 99) + 1; /* 스너스가 채워 주면 1회 더 */ if (q.supBan) { q.supBan = 0; ev(S, 'txt', q.x, q.y - 170, q.z, '봉인 풀림!', 1); } else q.gauge = Math.min(100, q.gauge + 50); } /* v0.47 우리 편 +50, 봉인은 풀어 주기만 */ q.st.boost = 3; ev(S, 'heal', q.x, q.y - 60, q.z); }
     p.gauge = 0; for (const q of opp) q.gauge = Math.max(0, q.gauge - 25); ev(S, 'txt', p.x, p.y - 200, p.z, '기운 펄펄!', 1, 1); /* v0.45 상대 게이지 -25 */ if (opp[0]) ev(S, 'txt', opp[0].x, opp[0].y - 150, opp[0].z, '부럽다…', 0);
   } else if (c.sup === 'basin') {
-    S.basin = { team: p.team, t: 20, by: p.i }; ev(S, 'basin', NETX, NETTOP, ZD / 2, p.team); ev(S, 'txt', NETX, NETTOP - 120, ZD / 2, '텅! 다라이 철벽!', 1, 1);
+    S.basin = { team: p.team, t: 20, by: p.i }; ev(S, 'basinOn', p.x, p.y - 120, p.z, p.team); ev(S, 'txt', p.x, p.y - 190, p.z, '다라이 대기! 공격해 봐~', 2); // v1.12 네트 위에 서 있지 않고 숨어 있다가, 상대가 공격하면 날아와 막는다
   } else if (c.sup === 'snore') {
     for (const q of opp) { q.st.sleep = 3.0 * gutMul(q); q.act = 'idle'; q.chg = 0; ev(S, 'zzz', q.x, q.y - 100, q.z); }
     p.st.sleep = 0.4; ev(S, 'zzz', p.x, p.y - 100, p.z); ev(S, 'txt', p.x, p.y - 160, p.z, '…본인도 잠듦', 0);
@@ -647,35 +654,38 @@ function hitSuper(S, p) {
 function landX(S, b) { const g = ballG(S, b), a = 0.5 * g, c = b.y + BR - GY, d = b.vy * b.vy - 4 * a * c, t = d > 0 ? (-b.vy + Math.sqrt(d)) / (2 * a) : 0.5; return b.x + b.vx * Math.max(0, t); }
 function stepNetLive(S) { // v0.56 춤추는 네트가 실제로 자리를 옮긴다
   const L = S.netLive, b = S.ball, T = L.team, own = T === 0 ? -1 : 1; // own = 우리 코트 쪽 방향
-  if (L.done) { L.tx = 0; if (S.phase === 'serve' || S.phase === 'swap') { S.netLive = null; return; } }
+  if (L.done) { L.tx = 0; if (S.phase === 'serve' || S.phase === 'swap') { S.netLive = null; return; } if (S.phase === 'rally' && Math.abs(L.dx) < 1) { S.netLive = null; return; } } // v1.15 경기 중 막고 돌아온 네트는 원래 네트로
   else if (S.phase === 'rally' && !L.mode && !b.held && !b.cap) {
     const sd = b.x < NETX ? 0 : 1;
     if (b.lastTeam === T && b.touches >= 2 && sd === T && b.vy < 0) { // 우리가 토스한 공: 네트가 공 뒤로 달려가 공을 상대 코트로 만들어 버린다
       const lx = landX(S, b), edge = T === 0 ? Math.min(b.x, lx) - 90 * XS : Math.max(b.x, lx) + 90 * XS;
-      L.tx = clamp(edge, 70 * XS, CW - 70 * XS) - NETX; L.mode = 1; ev(S, 'txt', NETX, NETTOP - 150, ZD / 2, '네트가 달린다?!', 3, 1); ev(S, 'netlive', NETX, NETTOP, ZD / 2, T);
+      if (edge < 70 * XS || edge > CW - 70 * XS) { /* v1.12 끝선 근처·밖에 떨어질 공: 네트가 공 뒤로 못 가니 따라가지 않는다(전에는 네트 앞에 떨어져 오히려 실점) */ }
+      else { L.tx = edge - NETX; L.mode = 1; ev(S, 'txt', NETX, NETTOP - 150, ZD / 2, '네트가 달린다?!', 3, 1); ev(S, 'netlive', NETX, NETTOP, ZD / 2, T); }
     } else if (b.lastTeam === 1 - T && sd === 1 - T && b.vx * own > 60 && Math.abs(b.x - NETX) < 520 * XS && !b.srv) { // 상대 공격: 네트가 마중 나가 공을 막는다
       L.tx = (b.x - NETX) * 0.55; L.mode = 2; ev(S, 'txt', NETX, NETTOP - 150, ZD / 2, '네트가 마중 나간다!', 3, 1); ev(S, 'netlive', NETX, NETTOP, ZD / 2, T);
     }
   }
+  if (L.mode === 2 && !L.done && S.phase === 'rally' && !b.held && !b.cap && (b.x - NETX) * own < 0) L.tx = (b.x - NETX) * 0.55; // v1.12 마중 나간 네트는 공을 계속 따라간다(전에는 상대가 네트 앞까지 다시 끌고 와 때리면 네트 뒤로 빠져 실점)
   const v = (L.done ? 900 : 1500) * DT, d = L.tx - L.dx; L.dx += Math.abs(d) < v ? d : Math.sign(d) * v;
   if (L.mode === 1 && !L.done && S.phase !== 'rally') L.done = true;
 }
+const DARAI_V = 900; // v1.13 시험: 600→55%, 760→62%, 900→68% (막은 뒤 그 점수를 딸 확률)
+const NET_VY = 320; // v1.15 막힌 공이 떨어지는 빠르기(시험: 60→72%, 320→77%, 450→89% 득점)
 function netCross(S, from) { // 공이 네트를 넘는 순간: 춤추는 네트·고무 다라이. true면 공을 새로 보냈다
   const b = S.ball;
   if (b.cap || b.held) return false;
-  if (S.basin && from !== S.basin.team) { // 상대 공이 다라이 쪽으로 넘어오면 무조건 막는다
+  if (S.basin && from !== S.basin.team && b.lastKind === 'spike') { // v1.12 상대 공격(스파이크)이 넘어오면 다라이가 날아와 무조건 막는다
     const T = S.basin.team, by = S.players[S.basin.by];
     b.x = from === 0 ? NETX - BR - 6 : NETX + BR + 6; b.sup = null; b.home = 0;
-    { const os = openSpot(S, T); lob(S, b, os[0], cz(os[1] + rnd(-60, 60)), GY - BR, NETTOP - 120); } // v0.45 상대 빈자리 쪽으로 낮게 튀지만 세지 않아 다시 칠 수 있다
+    { const os = openSpot(S, T); drive(S, b, oppD(T, rnd(90, 260)), cz(os[1] + rnd(-50, 50)), GY - BR, DARAI_V); } // v1.13 막은 공은 상대 코트 네트 앞 빈자리로 내리꽂힌다(블로킹처럼). 전에는 살살 넘겨 줘서 상대가 다시 공격해 오히려 실점이 많았다
     b.lastTeam = T; b.lastP = by ? by.i : -1; b.noP = -1; b.touches = 0; b.chain = 0; b.nice = 0; b.power = false; b.serial++; b.teamCd = 0;
-    ev(S, 'block', b.x, b.y, b.z, 1); ev(S, 'txt', NETX, NETTOP - 90, b.z, '퉁~!!', 3, 1); S.stopT = 0.12;
-    let q = null; for (const o of S.players) if (o.team !== T && !o.ko && (!q || Math.abs(o.x - NETX) < Math.abs(q.x - NETX))) q = o;
-    if (q) { q.st.stun = Math.max(q.st.stun, 1.0 * cool(q)); q.st.tub = 1.4; q.act = 'idle'; q.chg = 0; ev(S, 'tub', q.x, q.y - 90, q.z); ev(S, 'txt', q.x, q.y - 160, q.z, '텅! 앞이 안 보여', 2); }
+    ev(S, 'basinHit', b.x, b.y, b.z, T); S.stopT = 0.24; // 다라이가 날아오는 동안 공을 잠깐 멈춘다(그림이 날아와 맞는 순간 소리·글자)
     S.basin = null; return true;
   }
-  if (S.netLive && S.netLive.mode === 2 && from !== S.netLive.team) { // v0.56 마중 나간 네트에 막혀 상대 공이 못 넘어온다
+  if (S.netLive && S.netLive.mode === 2 && !S.netLive.done && from !== S.netLive.team) { // v0.56 마중 나간 네트에 막혀 상대 공이 못 넘어온다
     const L = S.netLive, nx = NETX + L.dx, back = from === 0 ? -1 : 1;
-    b.x = nx + back * (BR + 10); b.vx = back * 160; b.vy = Math.max(60, b.vy * 0.2); b.vz *= 0.3; b.power = false; b.sup = null; b.home = 0;
+    b.x = nx + back * (BR + 10); b.vx = back * 160; b.vy = Math.max(NET_VY, b.vy * 0.2); b.vz *= 0.3; b.power = false; b.sup = null; b.home = 0;
+    b.lastTeam = L.team; b.lastP = L.by; b.touches = 0; b.chain = 0; b.nice = 0; b.serial++; b.teamCd = 0; L.done = true; // v1.15 막은 뒤 네트는 제자리로 돌아가고, 상대는 막힌 공을 다시 받아 칠 수 있다(전에는 아무도 못 건드려 거의 무조건 득점)
     ev(S, 'net', b.x, b.y, b.z); ev(S, 'txt', nx, NETTOP - 100, b.z, '못 넘어와! 네트가 막았다', 3, 1); S.stopT = 0.12; return true;
   }
   if (S.netLive && S.netLive.mode) return false;
@@ -879,6 +889,13 @@ function stepPlayer(S, p) {
     const k = p.ko ? 0.035 : 0.07; for (const n of ['down', 'stun', 'frozen', 'sleep', 'flat']) if (s[n] > 0) s[n] = Math.max(0, s[n] - k);
     ev(S, 'wig', p.x, p.y - 50, p.z, p.i);
   }
+  if (!p.bot && (s.puppet > 0 || s.float > 0)) { // v1.15 해킹·무중력은 좌우 방향키를 번갈아 빠르게 누르면 풀린다
+    p.shk = Math.max(0, (p.shk || 0) - DT * 1.5); const d = (raw & K.L) ? 1 : (raw & K.R) ? 2 : 0;
+    if (d && p.lastLR && d !== p.lastLR) { p.shk++; ev(S, 'wig', p.x, p.y - 50, p.z, p.i);
+      if (s.float > 0) { s.float = Math.max(0, s.float - 0.22); if (s.float <= 0) ev(S, 'txt', p.x, p.y - 150, p.z, '버둥버둥 탈출!', 1); }
+      if (s.puppet > 0 && p.shk >= 10) { s.puppet = 0; p.pupN = 0; p.shk = 0; ev(S, 'txt', p.x, p.y - 150, p.z, '해킹 풀림!', 1); } }
+    if (d) p.lastLR = d;
+  } else p.shk = 0;
   if (s.flat <= 0 && p.wasFlat && p.gnd) { p.vy = -330; p.gnd = false; ev(S, 'txt', p.x, p.y - 120, p.z, '뿅!', 1); }
   p.wasFlat = s.flat > 0;
   if (s.puppet > 0 && !(S.phase === 'serve' && S.server === p.i)) { // 해킹당함(v0.50: 2점 동안, 서브하는 사람은 서브만 자유롭게): 조종자의 입력을 좌우 반전해서 따라 한다(점프만 허용)
@@ -1037,7 +1054,7 @@ function contacts(S) {
   const np = S.players.length;
   { const h = S.bh || (S.bh = []); S.bhI = ((S.bhI | 0) + 1) & 15; h[S.bhI] = { x: b.x, y: b.y, z: b.z, ser: b.serial }; } // v0.61 최근 16틱의 공 위치(지연이 있는 사람의 타격 판정에 쓴다)
   for (let oi = 0; oi < np; oi++) {
-    const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap || (S.netLive && S.netLive.mode)) return; /* v0.56 네트가 움직이는 중엔 결과가 정해진 공 */
+    const p = S.players[S.tick & 1 ? oi : np - 1 - oi]; if (S.phase !== 'rally' || b.cap || (S.netLive && S.netLive.mode && !S.netLive.done)) return; /* v0.56 네트가 움직이는 중엔 결과가 정해진 공 */
     if (p.hitCd > 0 || p.gone) continue;
     if (b.lastTeam === p.team && b.teamCd > 0) continue;
     const ck = ctl(S, p), s = psc(p), f = fdir(p), c = chOf(p), rm = (c.id === 'jiae' ? 1.2 : c.id === 'snurse' ? 1.05 : 1) * roleK(p, 'reach') * ck.reach * prsK(S, p) * (S.rallyHits === 0 && b.lastTeam !== p.team ? (b.ultra ? 1 : 1.12) : 1) * (p.ck || 1);
@@ -1207,7 +1224,7 @@ function aiTeam(S, team, pr) {
           if (inR || p.act === 'spike') { // 코스 선택
             inp &= ~15;
             let px = Tm.tac < 0.45 ? 0 : Tm.tac < 0.75 ? 1 : 2, pz = Tm.tacZ < 0.4 ? 0 : Tm.tacZ < 0.7 ? 1 : 2;
-            if (S.diff === 'hard') {
+            if (S.diff === 'hard' || S.diff === 'hell') {
               let bd = -1;
               for (let ix = 0; ix < 3; ix++) for (let iz = 0; iz < 3; iz++) {
                 const x = oppD(team, [350, 525, 185][ix]), z = [p.z, ZD * 0.18, ZD * 0.82][iz];
@@ -1335,7 +1352,7 @@ function step(S) {
         if (b.ceilFault) { b.ceilFault = false; b.srv = false; ev(S, 'txt', NETX, 250, ZD / 2, '서브 실패! (천장)', 3, 1); point(S, 1 - b.lastTeam, -1); break; }
         if (b.y + BR >= GY) {
           b.y = GY - BR;
-          if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW) && !(S.netLive && S.netLive.mode)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
+          if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW) && !(S.netLive && S.netLive.mode && !S.netLive.done)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
             const R = S.ref, od = b.x < 0 ? -b.x : b.x - CW, lt = b.lastTeam;
             if (R && R.n > 0 && R.team === 1 - lt && od < 90 * XS) { // v0.95 심판 뒤끝: 원한 있는 팀에 불리하게 '인'
               ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '인!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX, GY - 360, -70, '흥!', 3);
@@ -1346,7 +1363,7 @@ function step(S) {
             if (R && R.n <= 0 && !S.tut && b.z < ZD * 0.5 && Math.random() < (S.refP != null ? S.refP : 0.05)) { R.team = lt; R.n = 2; R.st = 2; R.t = 0; ev(S, 'ref', b.x, GY, b.z, lt); ev(S, 'txt', NETX, GY - 360, -70, '아야!! 두고 보자…', 3); } // v0.95 심판 쪽 아웃 공 약 5%가 심판 얼굴에
             break;
           }
-          const NL = S.netLive && S.netLive.mode ? S.netLive : null, side = NL ? (b.x < NETX + NL.dx ? 0 : 1) : sideOf(b.x), scorer = NL ? (side !== NL.team ? NL.by : -1) : b.lastTeam === 1 - side ? b.lastP : -1; if (NL) { NL.done = true; ev(S, 'txt', NETX + NL.dx, NETTOP - 130, ZD / 2, '네트 대이동 득점!!', 1, 1); }
+          const NL = S.netLive && S.netLive.mode && !S.netLive.done ? S.netLive : null, side = NL ? (b.x < NETX + NL.dx ? 0 : 1) : sideOf(b.x), scorer = NL ? (side !== NL.team ? NL.by : -1) : b.lastTeam === 1 - side ? b.lastP : -1; if (NL) { NL.done = true; ev(S, 'txt', NETX + NL.dx, NETTOP - 130, ZD / 2, '네트 대이동 득점!!', 1, 1); }
           { const R = S.ref; if (!NL && R && R.n > 0 && b.lastTeam === R.team && side !== R.team && Math.min(b.x, CW - b.x) < NETX * 0.45 && Math.random() < 0.6) { // v0.95 심판 뒤끝: 원한 있는 팀이 끝선 가까이 넣은 공은 '아웃'
             ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '아웃!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX, GY - 360, -70, '흥!', 3);
             point(S, 1 - R.team, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; b.home = 0; break; } }
