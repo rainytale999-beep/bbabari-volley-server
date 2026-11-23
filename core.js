@@ -169,7 +169,7 @@ function newGame(cfg) {
     wind: 0, score: [0, 0], target: cfg.target || 7, diff: cfg.diff || 'normal', ctrl: CTRLS[cfg.ctrl] ? cfg.ctrl : 'normal', itemsOn: cfg.items !== false,
     serveTeam: Math.random() < 0.5 ? 0 : 1, serveIdx: [0, 0], server: 0, pointTeam: -1,
     ball: { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rot: 0, lastTeam: -1, lastP: -1, touches: 0, noP: -1, power: false, sup: null, supTeam: -1, cap: false, held: true, teamCd: 0, float: 0, home: 0, fuse: 0, serial: 0, chain: 0, nice: 0, quick: false },
-    decoys: [], ufo: null, players: [], items: [], peels: [], ice: [0, 0], itemT: rnd(6, 10) * (st.fest ? 0.4 : 1), itemT2: [rnd(12, 22), rnd(12, 22)], itemId: 1,
+    decoys: [], ufo: null, players: [], items: [], peels: [], ice: [0, 0], itemT: rnd(6, 10) * (st.fest ? 0.4 : 1), itemT2: [rnd(20, 35), rnd(20, 35)], itemId: 1,
     freezeT: 0, stopT: 0, slowT: 0, slowN: 0, cut: null, ev: [], evId: 1, teamAI: [{ serial: -1, chaser: -1 }, { serial: -1, chaser: -1 }], winner: -1, rallyHits: 0, pred: null, netLive: null, basin: null, ref: { st: 0, t: 0, team: -1, n: 0 }, mom: null, steams: [], pig: null, pots: [], envT: rnd(8, 12), swap: 0, swapNext: false, swapN: (cfg.target || 7) >= 10 ? Math.round((cfg.target || 7) / 2) : 0 }; // swapN: 이 점수마다 코트 체인지(10점→5, 14점→7, 20점→10)
   for (let i = 0; i < n * 2; i++) S.players.push(mkPlayer(i, cfg.slots[i], n));
   if (cfg.chal && CHAL[cfg.chal]) { S.chal = { k: cfg.chal, n: 0, cur: 0, best: 0, sc: 0, tgt: null, side: -1, done: 0 }; S.itemsOn = false; S.target = 99; } // v0.95 혼자 하기 도전 모드
@@ -210,7 +210,7 @@ function startServe(S) {
   if (!S.tick) { const sp = S.players[S.server]; sp.x = netD(team, SRV); sp.z = ZD / 2; sp.atSrv = true; } // 경기 첫 서브
   const b = S.ball;
   b.ultra = false; b.vx = b.vy = b.vz = 0; b.lastTeam = -1; b.lastP = -1; b.noP = -1; b.touches = 0; b.power = false; b.sup = null; b.supTeam = -1; b.cap = false; b.held = true; b.float = 0; b.home = 0; b.fuse = 0; b.teamCd = 0; b.chain = 0; b.nice = 0; b.quick = false; b.serial++;
-  S.decoys = []; S.ufo = null; S.mom = null; S.pig = null; S.pots = []; S.steams = []; S.envT = rnd(6, 10); S.ice[0] = S.ice[1] = 0; S.items.length = 0;
+  S.decoys = []; S.ufo = null; S.mom = null; S.pig = null; S.pots = []; S.steams = []; S.envT = S.env.fest ? rnd(14, 24) : rnd(6, 10); /* v1.26 야시장 떨이 세일은 랠리 시작 14~24초 뒤(전엔 6~10초라 거의 매 랠리) */ S.ice[0] = S.ice[1] = 0; S.items.length = 0;
   S.wind = S.env.windy ? Math.round(rnd(-1, 1) * 230) : 0;
   if (S.chal) chalServe(S);
   for (const q of S.players) if (q.pupN > 0) q.st.puppet = 30; // 세네 해킹은 서브가 바뀌어도 이어진다
@@ -762,7 +762,7 @@ function stepStage(S) { // 경기장 장치: 목욕탕 수증기, 옥상 비둘�
   else if (e.quake) { S.envT = rnd(15, 25); ev(S, 'quake', NETX, GY, ZD / 2); ev(S, 'shake', NETX, GY, ZD / 2, 2); ev(S, 'txt', NETX, 170, ZD / 2, '쿠웅! 군고구마 주의!', 3, 1);
     const n = S.n + 2; for (let i = 0; i < n; i++) { const tgt = Math.random() < 0.6 ? S.players[Math.floor(Math.random() * S.players.length)] : null; S.pots.push({ x: clamp(tgt ? tgt.x + rnd(-70, 70) : rnd(60, CW - 60), 40, CW - 40), z: clamp(tgt ? tgt.z + rnd(-50, 50) : rnd(30, ZD - 30), 20, ZD - 20), t: rnd(1.2, 1.9), hit: false }); } }
   else if (e.sand) { S.envT = rnd(18, 26); const T = Math.random() < 0.5 ? 0 : 1; ev(S, 'wave', netD(T, 540), GY, ZD / 2, T); ev(S, 'txt', netD(T, 420), 230, ZD / 2, '파도다!', 3); for (const p of S.players) if (p.team === T && Math.abs(p.x - NETX) > 420 * XS) { p.st.wet2 = 2.5; ev(S, 'txt', p.x, p.y - 140, p.z, '첨벙!', 2); } } // v0.51 백사장: 파도가 코트 뒤쪽을 덮쳐 2.5초 느려짐
-  else if (e.fest) { S.envT = rnd(30, 40); if (S.itemsOn) { spawnItem(S, 0); spawnItem(S, 1); ev(S, 'txt', NETX, 210, ZD / 2, '떨이 세일!', 3, 1); } } // v0.51 야시장: 아이템 두 개가 한꺼번에
+  else if (e.fest) { S.envT = rnd(60, 80); /* v1.26 30~40초 → 60~80초 */ if (S.itemsOn) { spawnItem(S, 0); spawnItem(S, 1); ev(S, 'txt', NETX, 210, ZD / 2, '떨이 세일!', 3, 1); } } // v0.51 야시장: 아이템 두 개가 한꺼번에
   else if (e.flux) { S.envT = rnd(20, 28); S.flux = 5; e.g = 0.5; ev(S, 'txt', NETX, 200, ZD / 2, '무중력 돌풍!', 3, 1); ev(S, 'shake', NETX, GY, ZD / 2, 1); } // v0.51 외계의 별: 5초 동안 중력이 더 약해짐
   else S.envT = 99;
 }
@@ -1103,7 +1103,7 @@ function stepItems(S) {
   for (const q of S.peels) q.t -= DT; S.peels = S.peels.filter(q => q.t > 0);
   if (b.float > 0) b.float -= DT;
   if (!S.itemsOn || S.phase !== 'rally') return;
-  for (const T of [0, 1]) if ((S.itemT2[T] -= DT) <= 0) { S.itemT2[T] = rnd(20, 30) * (S.env.fest ? 0.7 : 1); spawnItem(S, T); } // v0.52 코트마다 20~30초에 하나
+  for (const T of [0, 1]) if ((S.itemT2[T] -= DT) <= 0) { S.itemT2[T] = rnd(35, 50) * (S.env.fest ? 0.7 : 1); spawnItem(S, T); } // v0.52 코트마다 20~30초에 하나 → v1.26 35~50초(첫 아이템 20~35초)
   for (const it of S.items) {
     it.t -= DT;
     for (const p of S.players) if (it.t > 0 && !p.ko && GY - p.y < 150 && Math.hypot(p.x - it.x, (p.z - it.z) * 1.2) < 46 * psc(p)) { // 밟으면 줍는다(하나만 가질 수 있다)
