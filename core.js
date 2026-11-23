@@ -100,7 +100,7 @@ const DIFFS = {
 // 팀 인원별 기본 위치 [네트로부터 거리, 깊이 비율]
 const SPK_CHG = 0.6, SPK_HOLD = 0.5, SPK_POW = 1.0; // v1.16 강스파이크 어렵게(전: 힘 모으기 0.42초, 꽉 찬 뒤 0.9초 버팀, 힘 0.9 넘으면 강타)
 const RCV_K = 0.9; // v1.16 사람의 리시브(상대 공 받기) 손 닿는 거리 10% 줄임(모든 난이도)
-const AIR_K = 0.62, AIR_R = 215, DEP_K = 0.29, DEP_R = 150, DEP_AIR = 0.34, DIV_K = 0.5; // v1.31 리시브·스파이크 자동 이동 살짝 더(전: 0.55·200, 깊이 0.25·140·공중 0.3) // v1.22 자동 따라가기 더 약하게(공중 앞뒤 끌기는 ak의 30%; v1.21: 공중 0.8·260, 깊이 0.5·190·공중 0.65 / v1.20: 1.0·320, 0.62·230·0.8, 다이빙은 공 쪽으로 100%)
+const AIR_K = 0.8, AIR_R = 250, AIR_ZK = 0.55, AIR_LEAD = 0.13, /* v1.39 스파이크 점프 때 공 쪽으로 더 잘 따라감(전: 0.62·215, 앞뒤 0.3, 앞서 보기 0.1초) */ DEP_K = 0.29, DEP_R = 150, DEP_AIR = 0.34, DIV_K = 0.5; // v1.31 리시브·스파이크 자동 이동 살짝 더(전: 0.55·200, 깊이 0.25·140·공중 0.3) // v1.22 자동 따라가기 더 약하게(공중 앞뒤 끌기는 ak의 30%; v1.21: 공중 0.8·260, 깊이 0.5·190·공중 0.65 / v1.20: 1.0·320, 0.62·230·0.8, 다이빙은 공 쪽으로 100%)
 const CTRLS = { // 조작 난이도
   easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.12, auto: true, buf: 0.18 } /* v1.16 perf 0.15→0.12, buf 0.22→0.18 */,
   normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.08, auto: false, buf: 0.14 } /* v1.16 perf 0.1→0.08, buf 0.18→0.14 */, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
@@ -826,8 +826,8 @@ function predMove(S, p, inp, edge) {
   if (aimAir) {
     const ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
     if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
-      const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
-      mx = clamp(ux * 0.7 + clamp((tx - p.x) / 30, -1, 1) * ak, -1, 1); mz = clamp(uz * 0.7 + clamp((tz - p.z) / 24, -1, 1) * ak * 0.3, -1, 1); /* v1.22 앞뒤 끌기는 더 약하게 */
+      const sc = psc(p), tx = b.x + b.vx * AIR_LEAD - fdir(p) * 16 * sc, tz = b.z + b.vz * AIR_LEAD;
+      mx = clamp((tx - p.x) / 30, -1, 1) * ak; mz = clamp((tz - p.z) / 24, -1, 1) * ak * AIR_ZK; /* v1.40 점프 중 공 근처에서는 방향키로 몸이 움직이지 않고 자동 이동만(방향키는 때릴 곳만 고름). v1.39: 방향키 12%, 그 전 70% */ /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
@@ -930,8 +930,8 @@ function stepPlayer(S, p) {
   if (aimAir) {
     const b = S.ball, ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
     if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
-      const sc = psc(p), tx = b.x + b.vx * 0.1 - fdir(p) * 16 * sc, tz = b.z + b.vz * 0.1;
-      mx = clamp(ux * 0.7 + clamp((tx - p.x) / 30, -1, 1) * ak, -1, 1); mz = clamp(uz * 0.7 + clamp((tz - p.z) / 24, -1, 1) * ak * 0.3, -1, 1); /* v1.22 앞뒤 끌기는 더 약하게 */
+      const sc = psc(p), tx = b.x + b.vx * AIR_LEAD - fdir(p) * 16 * sc, tz = b.z + b.vz * AIR_LEAD;
+      mx = clamp((tx - p.x) / 30, -1, 1) * ak; mz = clamp((tz - p.z) / 24, -1, 1) * ak * AIR_ZK; /* v1.40 점프 중 공 근처에서는 방향키로 몸이 움직이지 않고 자동 이동만(방향키는 때릴 곳만 고름). v1.39: 방향키 12%, 그 전 70% */ /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }

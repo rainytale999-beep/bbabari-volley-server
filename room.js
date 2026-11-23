@@ -66,6 +66,21 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
     if (k === 'ctrl') { if (!RC.CTRLS[v]) return 'bad'; room.ctrl = v; return null; }
     if (k === 'target') { if (![10, 14, 20].includes(v)) return 'bad'; room.target = v; return null; }
     if (k === 'items') { room.items = !!v; return null; }
+    if (k === 'shuffle') { // v1.40 랜덤으로 팀 섞기: 사람을 양 팀에 고르게(번갈아) 나누고 자리도 무작위로. 같은 팀에 같은 캐릭터가 겹치지 않는 배치를 고른다
+      if (room.boss) return '보스전에서는 팀을 섞을 수 없어요'; const hs = room.slots.filter(q => q.kind === 'human'), bots = room.slots.filter(q => q.kind !== 'human');
+      if (hs.length < 2) return '2명 이상 있을 때 섞을 수 있어요';
+      const n = room.n, tk = sl => [0, 1].map(T => sl.slice(T * n, T * n + n).filter(q => q.kind === 'human').map(q => q.id).sort().join(',')).join('/'), before = tk(room.slots), mix = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      let pick = null, fall = null;
+      for (let a = 0; a < 40 && !pick; a++) {
+        const h = mix(hs.slice()), first = Math.random() < 0.5 ? 0 : 1, slots = new Array(n * 2).fill(null), free = [mix([...Array(n).keys()]), mix([...Array(n).keys()])];
+        h.forEach((q, i) => { const T = (first + i) % 2; slots[T * n + free[T].shift()] = q; });
+        const bb = mix(bots.slice()); for (let i = 0; i < slots.length; i++) if (!slots[i]) slots[i] = bb.shift();
+        const clash = [0, 1].some(T => { const cs = slots.slice(T * n, T * n + n).filter(q => q.kind === 'human' && !q.rnd).map(q => q.ch); return new Set(cs).size !== cs.length; });
+        if (!clash) { fall = fall || slots; if (tk(slots) !== before) pick = slots; }
+        else if (!fall && a === 39) fall = slots;
+      }
+      room.slots = pick || fall || room.slots; fixTeams(room); room.shuf = (room.shuf | 0) + 1; return null;
+    }
     if (k === 'boss') { if (v !== '' && !(RC.BOSSES && RC.BOSSES[v])) return 'bad'; const hs = humansOf(room); if (v && hs.length > 3) return '보스전은 3명까지 할 수 있어요'; room.boss = v; if (v) { room.chal = ''; room.n = 3; } layoutRoom(room, hs); return null; } // v1.28 보스전
     if (k === 'chal') { if (room.boss && v) return '보스전에서는 도전과제를 할 수 없어요'; if (v !== '' && !RC.CHAL[v]) return 'bad'; if (v && humansOf(room).length > 1) return '도전 모드는 혼자 할 때만 돼요'; room.chal = v; if (v && room.n !== 1) { room.n = 1; layoutRoom(room, humansOf(room)); } return null; } // v0.95
   }
