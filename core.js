@@ -7,7 +7,7 @@ const COURTS = { 1: [1408, 374], 2: [1650, 451], 3: [1892, 517] }; // v0.35: 모
 const SRV = 695; // 서브 자리: 끝선 뒤(코트 밖). 네트로부터의 거리(1:1 기준)
 const OUT = { spk: 0.005, tec: 0.006, strong: 0.015, full: 0.03, deep: 0.02, side: 0.01, late: 0.05, heat: 0.025, recv: 0.015, hard: 0.06, stag: 0.13, dive: 0.05, over: 0.008, overHard: 0.06, toss: 0.004 }; // v0.41 공이 코트 밖으로 나가는 확률(스파이크는 합산, 리시브·토스는 상황별)
 const SERVE_OUT_P = 0.3; // 게이지를 가득 채운 강서브가 끝선 밖으로 나가 버릴 확률
-const STA = { rest: 1.8, idle: 1.1, run: 1.5, walk: 0.5, serve: 2.5, act: 0.8 }; // act = 동작(점프·스파이크 등) 소모 배율 // 체력 회복(랠리 사이·가만히)과 소모(달리기·걷기) 초당 양, 서브 때 회복량
+const STA = { rest: 1.5, idle: 0.9, run: 2.0, walk: 0.7, serve: 2.0, act: 1.05 }; /* v1.33 체력 소모 늘림(전: rest 1.8 idle 1.1 run 1.5 walk 0.5 serve 2.5 act 0.8) */ // act = 동작(점프·스파이크 등) 소모 배율 // 체력 회복(랠리 사이·가만히)과 소모(달리기·걷기) 초당 양, 서브 때 회복량
 const DIRECT_MISS = 0.5;
 const BLK_N = { 1: 1, 2: 0.85, 3: 0.6 }; // 인원별 PC 블로킹 시도 배율(인원마다 네트 앞 상황이 달라 따로 맞춘다) // 다이렉트(상대가 넘긴 공을 바로 스파이크)가 헛스윙이 되는 확률
 const MOVE_K = 1; // 걷기·달리기 속도 배율(v0.32 0.92 → v0.34 다시 1: 체력이 떨어지면 저절로 느려지므로)
@@ -93,7 +93,7 @@ const CATN = { atk: '공격형', dis: '방해형', def: '수비형' }, BEATS = {
 for (const c of CHARS) c.cat = SCAT[c.id];
 const DIFFS = {
   easy:   { name: '쉬움',   react: 0.42, err: 48, block: 0,    dive: 0.15, perf: 0,    two: 0,    sup: 0.4, chg: 0,   miss: 0.5, counter: 0, dig: 0 },
-  normal: { name: '보통',   react: 0.25, err: 22, block: 0.28, dive: 0.5,  perf: 0.09, two: 0.13, sup: 0.8, chg: 0.52, miss: 0.26, counter: 0.27, dig: 0.22 }, // v1.30 살짝 쉽게(v1.16 값과 그 전 값의 중간쯤: react 0.23 err 20 block 0.3 dive 0.55 perf 0.1 two 0.14 chg 0.55 miss 0.22 counter 0.3 dig 0.25) // v1.16 더 어렵게(전: react 0.27 err 24 block 0.27 dive 0.45 perf 0.08 two 0.12 chg 0.5 miss 0.3 counter 0.25)
+  normal: { name: '보통',   react: 0.27, err: 24, block: 0.26, dive: 0.46, perf: 0.08, two: 0.12, sup: 0.8, chg: 0.5,  miss: 0.3,  counter: 0.25, dig: 0.2 }, // v1.33 아주 조금 더 쉽게(v1.30: react 0.25 err 22 block 0.28 dive 0.5 perf 0.09 two 0.13 chg 0.52 miss 0.26 counter 0.27 dig 0.22 — 이제 v1.16 이전 값과 거의 같음). v1.30 살짝 쉽게(v1.16 값과 그 전 값의 중간쯤: react 0.23 err 20 block 0.3 dive 0.55 perf 0.1 two 0.14 chg 0.55 miss 0.22 counter 0.3 dig 0.25) // v1.16 더 어렵게(전: react 0.27 err 24 block 0.27 dive 0.45 perf 0.08 two 0.12 chg 0.5 miss 0.3 counter 0.25)
   hard:   { name: '어려움', react: 0.12, err: 7,  block: 0.5,  dive: 0.88, perf: 0.3,  two: 0.34, sup: 1,   chg: 1,   miss: 0.08, counter: 0.7, dig: 0.45 }, // v1.16 더 어렵게(전: react 0.15 err 9 block 0.45 dive 0.8 perf 0.25 two 0.3 miss 0.12 counter 0.6)
   hell:   { name: '지옥',   react: 0.07, err: 3,  block: 0.6,  dive: 0.95, perf: 0.45, two: 0.45, sup: 1,   chg: 1,   miss: 0.04, counter: 0.9, dig: 0.6 }, // v1.06 가장 어려움: 반응·정확도·블로킹·빈자리 공격 최상
 };
