@@ -126,9 +126,11 @@ function psc(p) { const s = p.st || {}; return (p.big > 0 ? 1.4 : 1) * (p.mini >
 function busy(p) { const s = p.st; return s.down > 0 || s.stun > 0 || s.hop > 0 || s.sleep > 0 || s.frozen > 0; }
 function cool(p) { return chOf(p).id === 'iseu' ? 0.4 : 1; }
 function tq(c) { return 3 + (c.tec - 3) * 0.75; } // v0.50 기술 1칸 효과(승률 영향이 너무 커서 0.75배)
-function gutMul(p) { return (1 + (3 - chOf(p).gut) * 0.17) * cool(p); } // v0.37: 능력치 차이를 더 크게(맷집 1 → 1.3배, 5 → 0.7배)
-function fat(p) { return 0.78 + 0.22 * clamp(p.hp, 0, 100) / 100; } // 체력이 떨어질수록 능력치가 내려간다(체력 0이면 78%)
-function tire(p, amt, mv) { if (p.ko || p.hp <= 10) return; p.hp = Math.max(10, p.hp - amt * (mv ? 1 : STA.act) * (0.97 + (3 - chOf(p).gut) * 0.09)); } // 움직이고 치는 데 드는 체력. 근성이 높으면 덜 지친다. 이것만으로는 10 아래로 안 내려간다
+function gutMul(p) { return (1 + (3 - chOf(p).gut) * 0.17) * cool(p) / balK(p); } // v0.37: 능력치 차이를 더 크게(맷집 1 → 1.3배, 5 → 0.7배)
+function balK(p) { return p.bal || 1; } // v1.53 숨은 밸런스: 점수 1점 차마다 앞선 팀 -1.5%, 뒤진 팀 +1.5%(보스전 제외, 화면에 안 보임)
+function balUpd(S) { for (const q of S.players) { const d = S.boss ? 0 : S.score[q.team] - S.score[1 - q.team]; q.bal = clamp(1 - 0.015 * d, 0.6, 1.4); } }
+function fat(p) { return (0.78 + 0.22 * clamp(p.hp, 0, 100) / 100) * balK(p); } // 체력이 떨어질수록 능력치가 내려간다(체력 0이면 78%)
+function tire(p, amt, mv) { if (p.ko || p.hp <= 10) return; p.hp = Math.max(10, p.hp - amt * (mv ? 1 : STA.act) * (0.97 + (3 - chOf(p).gut) * 0.09) / balK(p)); } // 움직이고 치는 데 드는 체력. 근성이 높으면 덜 지친다. 이것만으로는 10 아래로 안 내려간다
 function pSpeed(S, p) {
   const c = chOf(p), s = p.st;
   return (385 + (c.spd - 3) * 14) * MOVE_K * roleK(p, 'spd') * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (s.moon > 0 ? 1.3 : 1) * (s.giant > 0 ? 1.28 : 1) /* v1.15 거대 치와와는 빠르다(v1.31 1.2→1.28) */ * (s.wet2 > 0 ? 0.7 : 1) * (p.ck || 1) * (S.env.slip ? 1 + 0.2 * (p.mom || 0) : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * fat(p) * (s.half > 0 ? 0.5 : 1) * (p.tis > 0 ? 0.7 : 1) * (s.boost > 0 ? 1.25 : 1) * (s.giant > 0 ? 0.92 : 1)
@@ -144,7 +146,7 @@ const RK = { libero: { reach: 1.2, rcv: 1.4, dive: 1.25, tough: 0.55, spk: 0.8, 
 function roleK(p, k) { const r = RK[roleOf(p)]; return r && r[k] != null ? r[k] : 1; }
 function roleOf(p) { return p && p.role && ROLES[p.role] ? p.role : 'all'; }
 function powV(c) { return 1155 + (c.pow - 3) * 200; } // 파워 → 스파이크·강서브 공 속도(파워 3 = 예전과 같음)
-function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1) * (p.st && p.st.giant > 0 ? 1.15 : 1); } /* v1.31 1.1→1.15 */ // v1.15 거대 치와와는 더 높이
+function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * balK(p) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1) * (p.st && p.st.giant > 0 ? 1.15 : 1); } /* v1.31 1.1→1.15 */ // v1.15 거대 치와와는 더 높이
 function jumpH(S, p) { const v = jumpV(p); return v * v / (2 * pGrav(S, p)); }
 function ballG(S, b) { return GB * S.env.g * (b.float > 0 ? 0.5 : 1); }
 function heat(S) { return clamp(((S.rallyHits || 0) - 5) * 0.065, 0, 0.65); } // v0.38: 랠리가 길어지면 공이 빨라진다(6번째 터치부터 한 번에 +6.5%, 최대 +65%)
@@ -188,7 +190,7 @@ function home(S, p) {
 
 function swapSides(S) { // 코트 체인지: 두 팀이 좌우를 바꾼다(코드 안의 team 번호는 '왼쪽/오른쪽'이므로 선수·점수·서브 순서를 함께 맞바꾼다)
   S.swap ^= 1; S.score = [S.score[1], S.score[0]]; S.serveTeam = 1 - S.serveTeam; S.serveIdx = [S.serveIdx[1], S.serveIdx[0]]; S.teamAI = [S.teamAI[1], S.teamAI[0]]; S.ice = [S.ice[1], S.ice[0]];
-  for (const p of S.players) { p.team = 1 - p.team; p.x = CW - p.x; p.vx = -p.vx; }
+  for (const p of S.players) { p.team = 1 - p.team; p.x = CW - p.x; p.vx = -p.vx; } balUpd(S);
   for (const q of S.peels) q.x = CW - q.x; S.items.length = 0;
   if (S.thornF) { S.thornF.team = 1 - S.thornF.team; for (const q of S.thornF.pts) q[0] = CW - q[0]; }
   /* v1.12 팀 번호로 기억하는 것들도 같이 바꾼다(전에는 코트 체인지 뒤 춤추는 네트·다라이·심판 뒤끝·떠블 사용 여부가 상대 팀 것이 됐다) */
@@ -314,7 +316,7 @@ function supLocked(p) { return p.supBan > 0 || (p.supN | 0) >= (p.supCap || 99);
 function addGauge(p, v) { p.gauge = supLocked(p) ? 0 : clamp(p.gauge + v * GAUGE_K * (p.gk || 1), 0, 100); }
 function hurt(S, p, d) {
   if (p.ko) return;
-  p.hp -= d * (1 + (3 - chOf(p).gut) * 0.14);
+  p.hp -= d * (1 + (3 - chOf(p).gut) * 0.14) / balK(p);
   if (p.hp <= 0) {
     p.hp = 0; p.ko = true; p.st.down = Math.max(p.st.down, 3.3 * cool(p)); p.act = 'idle'; p.chg = 0; p.stats.fall++;
     p.vy = -1950 * Math.sqrt(S.env.g); p.gnd = false; p.vx = clamp(p.vx * 0.4, -150, 150); p.sky = true; p.bounce = 1;
@@ -350,7 +352,7 @@ function point(S, team, scorer) {
   if (S.thornF && --S.thornF.n <= 0) S.thornF = null; for (const q of S.players) { if (q.tis > 0) q.tis--; if (q.supBan > 0) q.supBan--; if (q.pupN > 0 && --q.pupN <= 0) q.st.puppet = 0; }
   const dv = S.dbl && S.dbl.on >= 0 ? 2 : 1; if (dv === 2) { ev(S, 'txt', NETX, 250, ZD / 2, team === S.dbl.on ? '떠블 성공! +2' : '떠블 실패… 상대 +2', team === S.dbl.on ? 1 : 3, 1); S.dbl.on = -1; } // v0.95 묻고 떠블로 가
   S.slowCmb = false; S.slowT = 0; S.score[team] += dv; S.phase = 'point'; S.phaseT = 0; S.pointTeam = team;
-  for (const T of [0, 1]) { const d = S.score[1 - T] - S.score[T], k = d >= 9 ? 0.15 : d >= 7 ? 0.12 : d >= 5 ? 0.08 : 0; for (const q of S.players) if (q.team === T) { if (k > 0 && !(q.ck > 1)) ev(S, 'txt', q.x, q.y - 170, q.z, '추격!', 1); q.ck = 1 + k; } } // v0.55 추격: 5점 차 이상 지는 팀 능력 +8~15%
+  for (const T of [0, 1]) { const d = S.score[1 - T] - S.score[T], k = d >= 9 ? 0.15 : d >= 7 ? 0.12 : d >= 5 ? 0.08 : 0; for (const q of S.players) if (q.team === T) { if (k > 0 && !(q.ck > 1)) ev(S, 'txt', q.x, q.y - 170, q.z, '추격!', 1); q.ck = 1 + k; } } balUpd(S); // v0.55 추격: 5점 차 이상 지는 팀 능력 +8~15%
   if (scorer >= 0) { S.players[scorer].stats.pts++; addGauge(S.players[scorer], 22); } // v0.49 내 공격으로 점수를 내면 크게
   for (const p of S.players) { addGauge(p, p.team === team ? (chOf(p).id === 'midwae' ? 22 : 10) : 14); if (p.team === team && p.gnd && !busy(p)) { p.vy = -rnd(330, 470); p.gnd = false; p.act = 'idle'; p.chg = 0; } }
   if (S.serveTeam !== team) { S.serveTeam = team; S.serveIdx[team]++; }
@@ -426,7 +428,7 @@ function hitBump(S, p, viaDive) {
   if (!wasOpp && roleOf(p) === 'setter') b.setBy = p.i; // v0.98 세터 토스: 동료 스파이크 힘↑
   const rl = roleOf(p); if (perfect && ((rl === 'libero' && wasOpp) || (rl === 'setter' && !wasOpp))) addGauge(p, 10); // v0.95 역할 퍼펙트 보너스(v0.98 +10)
   const n = b.touches, skill = (820 + (tq(c) - 3) * 170) * fat(p) * srvK * (p.ck || 1) * (wasOpp ? roleK(p, 'rcv') : roleK(p, 'toss'));
-  let err = c.id === 'barcode' ? 0 : (6 - tq(c)) * 10, stag = false;
+  let err = c.id === 'barcode' ? 0 : (6 - tq(c)) * 10 * (2 - balK(p)), stag = false;
   if (perfect) err = 0;
   if (c.id === 'banban' && !p.bw) err *= 0.6;
   else if (viaDive) err = 95;
@@ -477,7 +479,7 @@ function shotPreview(S, p, inp) { // 내 서브·스파이크가 날아갈 길(�
   return pts;
 }
 function spikeTarget(S, p, d, acc) { // acc: 오차 배율(연결 공격이면 작아진다)
-  acc = acc || 1; const T = p.team, c = chOf(p), e = rnd(-1, 1) * (16 + (6 - tq(c)) * 16) * acc, ez = rnd(-1, 1) * (10 + (6 - tq(c)) * 11) * acc;
+  acc = acc || 1; const T = p.team, c = chOf(p), e = rnd(-1, 1) * (16 + (6 - tq(c)) * 16) * acc * (2 - balK(p)), ez = rnd(-1, 1) * (10 + (6 - tq(c)) * 11) * acc * (2 - balK(p));
   const dist = d.fwd ? 525 : d.back ? 185 : 350;
   return { x: clamp(oppD(T, dist) + e, 50, CW - 50), z: cz(laneZ(p, d, p.z) + ez) };
 }
