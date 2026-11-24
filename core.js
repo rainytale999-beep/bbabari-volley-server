@@ -1376,17 +1376,17 @@ function step(S) {
           if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW) && !(S.netLive && S.netLive.mode && !S.netLive.done)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
             const R = S.ref, od = b.x < 0 ? -b.x : b.x - CW, lt = b.lastTeam;
             if (R && R.n > 0 && R.team === 1 - lt && od < 90 * XS) { // v0.95 심판 뒤끝: 원한 있는 팀에 불리하게 '인'
-              ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '인!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX, GY - 360, -70, '흥!', 3);
+              ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '인!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX + 62 * XS, GY - 410, -40, '흥!', 3);
               point(S, lt, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; break;
             }
             ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, b.outK === 'serve' ? '서브 아웃!' : '아웃!', 2, 1);
             point(S, 1 - lt, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6;
-            if (R && R.n <= 0 && !S.tut && b.z < ZD * 0.5 && Math.random() < (S.refP != null ? S.refP : 0.05)) { R.team = lt; R.n = 2; R.st = 2; R.t = 0; ev(S, 'ref', b.x, GY, b.z, lt); ev(S, 'txt', NETX, GY - 360, -70, '아야!! 두고 보자…', 3); } // v0.95 심판 쪽 아웃 공 약 5%가 심판 얼굴에
+            if (R && R.n <= 0 && !S.tut && Math.random() < (S.refP != null ? S.refP : 0.15)) { /* v1.50 5%·앞쪽 절반만 → 15%·양쪽(너무 드물어 못 봤다) */ R.team = lt; R.n = 2; R.st = 2; R.t = 0; ev(S, 'ref', b.x, GY, b.z, lt); ev(S, 'txt', NETX + 62 * XS, GY - 410, -40, '아야!! 두고 보자…', 3); } // v0.95 심판 쪽 아웃 공 약 5%가 심판 얼굴에
             break;
           }
           const NL = S.netLive && S.netLive.mode && !S.netLive.done ? S.netLive : null, side = NL ? (b.x < NETX + NL.dx ? 0 : 1) : sideOf(b.x), scorer = NL ? (side !== NL.team ? NL.by : -1) : b.lastTeam === 1 - side ? b.lastP : -1; if (NL) { NL.done = true; ev(S, 'txt', NETX + NL.dx, NETTOP - 130, ZD / 2, '네트 대이동 득점!!', 1, 1); }
           { const R = S.ref; if (!NL && R && R.n > 0 && b.lastTeam === R.team && side !== R.team && Math.min(b.x, CW - b.x) < NETX * 0.45 && Math.random() < 0.6) { // v0.95 심판 뒤끝: 원한 있는 팀이 끝선 가까이 넣은 공은 '아웃'
-            ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '아웃!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX, GY - 360, -70, '흥!', 3);
+            ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '아웃!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX + 62 * XS, GY - 410, -40, '흥!', 3);
             point(S, 1 - R.team, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; b.home = 0; break; } }
           ev(S, 'ground', b.x, GY, b.z, b.sup || 0, b.power || b.sup ? 1 : 0); if (b.power || b.sup) S.stopT = 0.07;
           if (scorer >= 0 && b.power && roleOf(S.players[scorer]) === 'spiker') addGauge(S.players[scorer], 10); // v0.95 스파이커 득점 보너스
