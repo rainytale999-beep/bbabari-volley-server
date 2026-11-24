@@ -37,6 +37,9 @@ function onMsg(ws, m) {
   else if (m.t === 'in') { if (r.playing) send(o, { t: 'in', f: m.f | 0, k: m.k | 0, g: m.g | 0 }); } // 입력 그대로 전달
   else if (m.t === 'sum') { if (r.playing) send(o, { t: 'sum', f: m.f | 0, v: m.v | 0 }); } // 계산이 어긋났는지 확인용
   else if (m.t === 'end') { r.playing = false; }
+  else if (m.t === 'tut') { // v1.31 튜토리얼 상태·관전 화면을 상대에게 전달(숫자만)
+    const k = m.s === 'tut' || m.s === 'done' || m.s === 'snap' ? m.s : ''; if (!k) return;
+    send(o, k === 'snap' ? { t: 'tut', s: k, d: Array.isArray(m.d) ? m.d.slice(0, 60).map(v => Math.round(+v || 0)) : [] } : { t: 'tut', s: k }); }
   else if (m.t === 'ping') send(ws, { t: 'pong', c: m.c });
 }
 function attach(server) {
