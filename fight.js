@@ -27,11 +27,12 @@ function onMsg(ws, m) {
   const o = other(ws);
   if (m.t === 'ch') { ws.ch = m.ch | 0; send(o, { t: 'peerCh', ch: ws.ch }); }
   else if (m.t === 'love') { // 대전 신청(둘 다 누르면 시작)
-    const i = r.peers.indexOf(ws); r.ready[i] = !!m.on; send(o, { t: 'peerLove', on: !!m.on });
+    const i = r.peers.indexOf(ws); r.ready[i] = !!m.on; if (m.rtt) ws.rtt = Math.max(1, Math.min(1000, +m.rtt || 0)); send(o, { t: 'peerLove', on: !!m.on });
     if (r.peers.length === 2 && r.ready[0] && r.ready[1] && !r.playing) {
       r.playing = true; r.ready = [false, false]; r.seq++;
       const seed = (Math.random() * 2147483647) | 0, chs = r.peers.map(p => p.ch);
-      r.peers.forEach((p, k) => send(p, { t: 'start', seed, side: k, chs, game: r.seq, delay: 4 }));
+      const oneWay = (r.peers[0].rtt + r.peers[1].rtt) / 2, delay = r.peers[0].rtt > 0 && r.peers[1].rtt > 0 ? Math.max(2, Math.min(5, Math.round(oneWay / 16.7 * 0.6) + 1)) : 3; // v1.34 입력 지연을 두 사람 통신 속도에 맞춰 2~5프레임(나머지는 화면이 롤백으로 메움)
+      r.peers.forEach((p, k) => send(p, { t: 'start', seed, side: k, chs, game: r.seq, delay }));
     }
   }
   else if (m.t === 'in') { if (r.playing) send(o, { t: 'in', f: m.f | 0, k: m.k | 0, g: m.g | 0 }); } // 입력 그대로 전달
@@ -41,6 +42,7 @@ function onMsg(ws, m) {
     const k = m.s === 'tut' || m.s === 'done' || m.s === 'snap' ? m.s : ''; if (!k) return;
     send(o, k === 'snap' ? { t: 'tut', s: k, d: Array.isArray(m.d) ? m.d.slice(0, 60).map(v => Math.round(+v || 0)) : [] } : { t: 'tut', s: k }); }
   else if (m.t === 'ping') send(ws, { t: 'pong', c: m.c });
+  else if (m.t === 'rtt') ws.rtt = Math.max(1, Math.min(1000, +m.v || 0)); // v1.34 화면이 잰 왕복 시간(입력 지연 정하는 데 씀)
 }
 function attach(server) {
   const fw = new WebSocketServer({ noServer: true, maxPayload: 512 });
