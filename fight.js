@@ -35,7 +35,8 @@ function onMsg(ws, m) {
       r.peers.forEach((p, k) => send(p, { t: 'start', seed, side: k, chs, game: r.seq, delay }));
     }
   }
-  else if (m.t === 'in') { if (r.playing) send(o, { t: 'in', f: m.f | 0, k: m.k | 0, g: m.g | 0 }); } // 입력 그대로 전달
+  else if (m.t === 'in') { if (r.playing) send(o, m.s === 0 || m.s === 1 ? { t: 'in', f: m.f | 0, k: m.k | 0, g: m.g | 0, s: m.s } : { t: 'in', f: m.f | 0, k: m.k | 0, g: m.g | 0 }); } // 입력 그대로 전달(s: 자리를 비운 사람 대신 PC가 만든 입력)
+  else if (m.t === 'away' || m.t === 'back' || m.t === 'backok') { if (r.playing) send(o, { t: m.t, f: m.f | 0, g: m.g | 0 }); } // v1.35 자리 비움·돌아옴 알림
   else if (m.t === 'sum') { if (r.playing) send(o, { t: 'sum', f: m.f | 0, v: m.v | 0 }); } // 계산이 어긋났는지 확인용
   else if (m.t === 'end') { r.playing = false; }
   else if (m.t === 'tut') { // v1.31 튜토리얼 상태·관전 화면을 상대에게 전달(숫자만)
