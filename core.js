@@ -1200,7 +1200,12 @@ function aiTeam(S, team, pr) {
   for (const p of mine) {
     if (!p.bot) continue;
     let inp = 0; const f = fdir(p), s = psc(p), c = chOf(p);
-    const go = (tx, tz, dz) => { if (p.x < tx - dz) inp |= K.R; else if (p.x > tx + dz) inp |= K.L; if (p.z < tz - dz) inp |= K.D; else if (p.z > tz + dz) inp |= K.U; };
+    const go0 = (tx, tz, dz) => { if (p.x < tx - dz) inp |= K.R; else if (p.x > tx + dz) inp |= K.L; if (p.z < tz - dz) inp |= K.D; else if (p.z > tz + dz) inp |= K.U; };
+    const go = (tx, tz, dz) => { // v1.62 자리 잡기(블로킹 대기·제자리)용 멈춤 여유(히스테리시스): dz 밖이면 출발, 목표 근처(dz×0.35)에 오거나 지나치면 멈춘다 — 목표가 조금씩 움직일 때 한 프레임씩 섰다 갔다(부들부들)하지 않게
+      const A = p.ai, ex = tx - p.x, ez = tz - p.z;
+      if (A.mx && (Math.sign(ex) !== A.mx || Math.abs(ex) < dz * 0.35)) A.mx = 0; if (!A.mx && Math.abs(ex) > dz) A.mx = Math.sign(ex);
+      if (A.mz && (Math.sign(ez) !== A.mz || Math.abs(ez) < dz * 0.35)) A.mz = 0; if (!A.mz && Math.abs(ez) > dz) A.mz = Math.sign(ez);
+      if (A.mx > 0) inp |= K.R; else if (A.mx < 0) inp |= K.L; if (A.mz > 0) inp |= K.D; else if (A.mz < 0) inp |= K.U; };
     const press = k => { if (!(p.prev & k)) inp |= k; };
     const fwdK = f > 0 ? K.R : K.L, backK = f > 0 ? K.L : K.R, h = home(S, p);
     if (S.phase === 'serve') {
@@ -1234,7 +1239,7 @@ function aiTeam(S, team, pr) {
         const it = best === p ? bestIt : intercept(S, p, pr, 'bump');
         if (it && it.mode === 'spike') {
           const tx = it.x - f * 28 * s + Tm.err * 0.5, tz = it.z + Tm.errZ * 0.4;
-          go(tx, tz, 10);
+          go0(tx, tz, 10);
           const tj = jumpV(p) / pGrav(S, p) * 0.8;
           const inR = !p.gnd && d3(b.x, b.y, b.z, p.x + f * 16 * s, p.y - 80 * s, p.z) < 100 * s * 0.86;
           if (p.gnd) { if (it.t <= tj + 0.02 && dxz(p, tx, tz) < 55) { inp &= ~K.S; press(K.S); } }
@@ -1257,7 +1262,7 @@ function aiTeam(S, team, pr) {
           }
         } else if (it) {
           const tx = it.x - f * 8 + Tm.err, tz = it.z + Tm.errZ * 0.6;
-          go(tx, tz, 9);
+          go0(tx, tz, 9);
           const dd = dxz(p, tx, tz);
           if (Tm.miss && n === 0) { /* 타이밍을 놓쳤다 → 몸으로 받게 됨 */ }
           else if (ballNear(S, p, 0.84)) {
@@ -1275,7 +1280,7 @@ function aiTeam(S, team, pr) {
       } else {
         let hx = h[0], hz = h[1];
         if (p === front && oppAttack && D.block > 0 && Tm.roll < D.block * (BLK_N[S.n] || 1)) {
-          hx = netD(team, 58); hz = (Tm.bz != null ? Tm.bz : b.z) + Tm.errZ * 1.8 + (Tm.roll2 - 0.5) * 60; // 공 깊이를 조금 늦게, 오차를 두고 따라간다(코스를 비틀면 피할 수 있게)
+          hx = netD(team, 58); hz = (Tm.bz != null ? Tm.bz : b.z) + Tm.errZ * 1.8 + (Tm.roll2 - 0.5) * 60; { const NX = NETX + (S.netLive ? S.netLive.dx || 0 : 0), lim = NETW / 2 + 24 * psc(p) + 16; hx = team === 0 ? Math.min(hx, NX - lim) : Math.max(hx, NX + lim); } /* v1.62 네트에 막혀 못 가는 자리(거대화·움직이는 네트)를 목표로 삼아 제자리걸음하지 않게 */ // 공 깊이를 조금 늦게, 오차를 두고 따라간다(코스를 비틀면 피할 수 있게)
           const atk = opp.find(q => !q.gnd && Math.abs(q.x - NETX) < 260 * XS && d3(b.x, b.y, b.z, q.x, q.y - 80, q.z) < 190);
           go(hx, hz, 12);
           if (atk && p.gnd && dxz(p, hx, hz) < 70) { inp &= ~K.S; press(K.S); }
