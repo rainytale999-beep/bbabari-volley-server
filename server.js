@@ -6,15 +6,47 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'); // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.35'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.36'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
+
+/* v1.36 랭킹: 솔로 = PC와 혼자 하기 승리 수(앱이 보냄, 45초에 1번까지), 대전 = 온라인에서 사람끼리 붙어 이긴 횟수(서버가 직접 셈), 도전 = 도전 모드 최고 점수(앱이 보냄)
+   저장 파일은 서버 폴더 바깥(한 단계 위)에 둔다 → GitHub 자동 배포로 서버 파일이 바뀌어도 기록은 남는다 */
+const RANK_FILE = process.env.RANK_FILE || path.join(__dirname, '..', 'bbv_rank.json'), CHAL_KINDS = ['serve', 'spike', 'rally'];
+let RK = { solo: {}, duel: {}, chal: { serve: {}, spike: {}, rally: {} } }, rkDirty = false; const rkSoloAt = new Map();
+try { const o = JSON.parse(fs.readFileSync(RANK_FILE, 'utf8')); if (o && o.solo) RK.solo = o.solo; if (o && o.duel) RK.duel = o.duel; if (o && o.chal) for (const c of CHAL_KINDS) RK.chal[c] = o.chal[c] || {}; } catch (e) { }
+setInterval(() => { if (!rkDirty) return; rkDirty = false; const tmp = RANK_FILE + '.tmp'; fs.writeFile(tmp, JSON.stringify(RK), e => { if (e) return console.error('rank save', e.message); fs.rename(tmp, RANK_FILE, () => { }); }); }, 10000).unref();
+const tkOk = k => typeof k === 'string' && /^[A-Za-z0-9+/=_.-]{8,128}$/.test(k);
+const rkName = n => String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 12) || '이름없음';
+function rkTab(type, kind) { return type === 'solo' ? RK.solo : type === 'duel' ? RK.duel : type === 'chal' && CHAL_KINDS.includes(kind) ? RK.chal[kind] : null; }
+function rkTop(tab, k) { const all = Object.entries(tab).sort((a, b) => b[1].s - a[1].s || a[1].t - b[1].t); const i = tkOk(k) ? all.findIndex(e => e[0] === k) : -1;
+  return { top: all.slice(0, 50).map(([kk, v]) => ({ n: v.n, s: v.s, me: kk === k ? 1 : 0 })), me: i >= 0 ? { r: i + 1, s: all[i][1].s } : null, total: all.length }; }
+function rankHttp(req, res) {
+  const hd = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+  if (req.method === 'OPTIONS') { res.writeHead(204, hd); return res.end(); }
+  if (req.method !== 'POST') { res.writeHead(405, hd); return res.end('{}'); }
+  let body = ''; req.on('data', d => { body += d; if (body.length > 2048) req.destroy(); });
+  req.on('end', () => { let m = null, out = { ok: 0 }; try { m = JSON.parse(body); } catch (e) { }
+    if (m && m.a === 'get') { const tab = rkTab(m.type, m.kind); if (tab) out = Object.assign({ ok: 1 }, rkTop(tab, m.k)); }
+    else if (m && m.a === 'solo' && tkOk(m.k)) { const t = Date.now(), last = rkSoloAt.get(m.k) || 0; // 한 판은 아무리 빨라도 45초 넘게 걸린다
+      if (t - last > 45000) { rkSoloAt.set(m.k, t); if (rkSoloAt.size > 20000) rkSoloAt.clear(); const o = RK.solo[m.k] || (RK.solo[m.k] = { n: '', s: 0, t: 0 }); o.s++; o.n = rkName(m.n); o.t = t; rkDirty = true; } out = { ok: 1 }; }
+    else if (m && m.a === 'chal' && tkOk(m.k)) { const tab = rkTab('chal', m.kind), sc = Math.floor(+m.s); // 도전 점수 최대: 서브 30점, 스파이크 10연속, 랠리 30회
+      if (tab && sc >= 0 && sc <= ({ serve: 30, spike: 10, rally: 30 })[m.kind]) { const o = tab[m.k]; if (!o || sc > o.s) { tab[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } out = { ok: 1 }; } }
+    res.writeHead(200, hd); res.end(JSON.stringify(out)); });
+}
+function rankDuel(room) { // 온라인 경기가 끝나면: 양쪽 팀에 사람이 1명 이상 있을 때만, 이긴 팀의 (토스) 사람에게 1승
+  const S = room.S, cfg = room.cfg; if (!S || cfg.boss || cfg.chal) return;
+  const hum = [0, 0], win = []; S.players.forEach((p, i) => { const sl = cfg.slots[i]; if (!sl || sl.kind !== 'human') return; hum[p.team]++; if (p.team === S.winner) win.push(sl.id); });
+  if (!hum[0] || !hum[1]) return;
+  for (const id of win) { const ws = room.clients.get(id); if (!ws || !tkOk(ws.tk)) continue; const o = RK.duel[ws.tk] || (RK.duel[ws.tk] = { n: '', s: 0, t: 0 }); o.s++; o.n = rkName(ws.name); o.t = Date.now(); rkDirty = true; }
+}
 
 const server = http.createServer((req, res) => {
   let u = '/';
   try { u = decodeURIComponent((req.url || '/').split('?')[0]); } catch (e) { }
   if (u === '/') u = '/index.html';
+  if (u === '/rank') return rankHttp(req, res);
   if (u === '/rooms') { // 열린 방 목록(방 찾기)
     const list = [];
     for (const room of rooms.values()) { const cfg = room.cfg, own = cfg.slots.find(s => s.kind === 'human' && s.id === cfg.owner), humans = cfg.slots.filter(s => s.kind === 'human').length; list.push({ code: room.code, lock: !!room.pw, title: cfg.title || '', host: own ? own.name : '?', n: cfg.n, humans, max: cfg.n * 2, specs: (cfg.specs || []).length, state: room.S ? (room.over ? 'result' : 'game') : 'lobby' }); }
@@ -104,6 +136,7 @@ function onLeave(ws) {
 function onMsg(ws, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'hello') return onHello(ws, m);
+  if (m.t === 'tk') { if (tkOk(m.k)) ws.tk = m.k; return; } // v1.36 토스 앱 사용자 표시(랭킹용)
   const room = ws.room; if (!room) return;
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
@@ -170,7 +203,7 @@ function tick() {
         if (!out[key]) { const p = fastC ? (pf || (pf = R.pack(S, evs, acks))) : (ps || (ps = R.pack(S, room.evOut, acks))); out[key] = ws.bin === 2 ? R.enc(PK.map(k => p[k])) : ws.bin ? R.enc(p) : JSON.stringify({ t: 's', s: p }); }
         ws.send(out[key]); }
       if (even) room.evOut = [];
-      if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }
+      if (S.phase === 'over' && S.phaseT > 1.6 && !room.over) { room.over = true; room.overAt = t; try { rankDuel(room); } catch (e) { console.error('rank', e); } bc(room, { t: 'result', stats: S.players.map(p => p.stats) }); bc(room, pub(room)); }
     }
     if (room.acc > DT * 6) room.acc = 0;
     if (room.S && room.over && t - room.overAt > 90000) toLobby(room); // 결과 화면에서 1분 30초 지나면 자동으로 로비
