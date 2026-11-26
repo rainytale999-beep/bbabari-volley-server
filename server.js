@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'); // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.39'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.41'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -15,10 +15,10 @@ const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js
    저장 파일은 서버 폴더 바깥(한 단계 위)에 둔다 → GitHub 자동 배포로 서버 파일이 바뀌어도 기록은 남는다 */
 /* v1.38 랭킹이 서버 재시작(자동 배포)마다 초기화되던 문제: 서버 폴더 위(/opt)는 서버 계정(ubuntu)이 쓸 수 없어 저장이 늘 실패했음
    → 서버 계정의 홈 폴더(/home/ubuntu/bbv_rank.json)에 저장. GitHub 배포와 상관없는 자리라 기록이 남는다. 저장 상태는 /health 에 표시 */
-const RANK_FILE = process.env.RANK_FILE || path.join(require('os').homedir(), 'bbv_rank.json'), CHAL_KINDS = ['serve', 'spike', 'rally'];
-let RK = { solo: {}, duel: {}, chal: { serve: {}, spike: {}, rally: {} }, shoot: {} }, rkDirty = false; const rkSoloAt = new Map();
+const RANK_FILE = process.env.RANK_FILE || path.join(require('os').homedir(), 'bbv_rank.json'), CHAL_KINDS = ['serve', 'spike', 'recv', 'rally']; // v1.40 스파이크 리시브 추가
+let RK = { solo: {}, duel: {}, chal: { serve: {}, spike: {}, recv: {}, rally: {} }, chalV: 2, shoot: {} }, rkDirty = false; const rkSoloAt = new Map();
 let rkSave = '아직 저장 안 함';
-try { const o = JSON.parse(fs.readFileSync(RANK_FILE, 'utf8')); if (o && o.solo) RK.solo = o.solo; if (o && o.duel) RK.duel = o.duel; if (o && o.shoot) RK.shoot = o.shoot; if (o && o.chal) for (const c of CHAL_KINDS) RK.chal[c] = o.chal[c] || {}; rkSave = '불러옴'; }
+try { const o = JSON.parse(fs.readFileSync(RANK_FILE, 'utf8')); if (o && o.solo) RK.solo = o.solo; if (o && o.duel) RK.duel = o.duel; if (o && o.shoot) RK.shoot = o.shoot; if (o && o.chal && o.chalV === 2) for (const c of CHAL_KINDS) RK.chal[c] = o.chal[c] || {}; else if (o && o.chal) rkDirty = true; rkSave = '불러옴'; } // v1.40 도전은 점수제로 바뀌어 예전(연속·회) 기록은 한 번 비움
 catch (e) { if (e.code === 'ENOENT') rkDirty = true; else rkSave = '불러오기 실패: ' + e.message; } // 파일이 없으면 바로 한 번 저장해서 쓸 수 있는 자리인지 확인
 setInterval(() => { if (!rkDirty) return; rkDirty = false; const tmp = RANK_FILE + '.tmp'; fs.writeFile(tmp, JSON.stringify(RK), e => { if (e) { rkDirty = true; rkSave = '저장 실패: ' + e.message; return console.error('rank save', e.message); }
   fs.rename(tmp, RANK_FILE, e2 => { rkSave = e2 ? '저장 실패: ' + e2.message : '저장 OK ' + new Date().toISOString().slice(11, 19); }); }); }, 10000).unref();
@@ -38,8 +38,8 @@ function rankHttp(req, res) {
       if (t - last > 45000) { rkSoloAt.set(m.k, t); if (rkSoloAt.size > 20000) rkSoloAt.clear(); const o = RK.solo[m.k] || (RK.solo[m.k] = { n: '', s: 0, t: 0 }); o.s++; o.n = rkName(m.n); o.t = t; rkDirty = true; } out = { ok: 1 }; }
     else if (m && m.a === 'shoot' && tkOk(m.k)) { const sc = Math.floor(+m.s); // v1.39 은하 대소동 최고 점수(한 판 끝날 때 앱이 보냄)
       if (sc > 0 && sc <= 5000000) { const o = RK.shoot[m.k]; if (!o || sc > o.s) { RK.shoot[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } } out = { ok: 1 }; }
-    else if (m && m.a === 'chal' && tkOk(m.k)) { const tab = rkTab('chal', m.kind), sc = Math.floor(+m.s); // 도전 점수 최대: 서브 30점, 스파이크 10연속, 랠리 30회
-      if (tab && sc >= 0 && sc <= ({ serve: 30, spike: 10, rally: 30 })[m.kind]) { const o = tab[m.k]; if (!o || sc > o.s) { tab[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } out = { ok: 1 }; } }
+    else if (m && m.a === 'chal' && tkOk(m.k)) { const tab = rkTab('chal', m.kind), sc = Math.floor(+m.s); // v1.40 도전 점수 최대: 서브·스파이크·리시브 100점(10번×10점), 랠리 5000점
+      if (tab && sc >= 0 && sc <= ({ serve: 100, spike: 100, recv: 100, rally: 5000 })[m.kind]) { const o = tab[m.k]; if (!o || sc > o.s) { tab[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } out = { ok: 1 }; } }
     res.writeHead(200, hd); res.end(JSON.stringify(out)); });
 }
 function rankDuel(room) { // 온라인 경기가 끝나면: 양쪽 팀에 사람이 1명 이상 있을 때만, 이긴 팀의 (토스) 사람에게 1승
