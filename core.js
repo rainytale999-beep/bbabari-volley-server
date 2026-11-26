@@ -1445,12 +1445,12 @@ function drill(S, i) { // i번 선수가 받아 올린 공이 네트 앞에 떠 
   b.x = p.x + fdir(p) * 20; b.y = p.y - 90; b.z = p.z; b.vz = 0;
   lob(S, b, netD(T, 140), ZD / 2, GY - BR, GY - 560);
 }
-const CHAL = { serve: { name: '서브 과녁', goal: '서브 10번 · 구석 과녁에 세게 꽂을수록 최대 10점' }, spike: { name: '스파이크 과녁', goal: '스파이크 10번 · 구석 과녁에 세게 꽂을수록 최대 10점' }, recv: { name: '스파이크 리시브', goal: '강스파이크 10개 · 타이밍 좋을수록 최대 10점' }, rally: { name: '랠리', goal: '칠 때마다 1점 · 나이스 3점 · 30회 +10점' } }; // v1.81 도전 모드 전부 점수제 + 스파이크 리시브
+const CHAL = { serve: { name: '서브 과녁', goal: '서브 10번 · 구석 과녁에 세게 꽂을수록 높은 점수' }, spike: { name: '스파이크 과녁', goal: '스파이크 10번 · 구석 과녁에 세게 꽂을수록 높은 점수' }, recv: { name: '스파이크 리시브', goal: '강스파이크 10개 · 타이밍이 좋을수록 높은 점수' }, rally: { name: '랠리', goal: '칠 때마다 점수 · 나이스는 3배 · 30회 넘기면 보너스' } }; // v1.81 도전 모드 전부 점수제 + 스파이크 리시브
 function chalMe(S) { return S.players.find(q => !q.bot) || S.players[0]; }
 function chalServe(S) { // 서브 시작 때 도전 모드 준비
   const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball; C2.side = -1;
   for (const q of S.players) { q.gone = C2.k !== 'rally' && q.team !== T; q.chalSpk = false; }
-  C2.tr = chalD(S).r; C2.dm = chalD(S).m; C2.dn = (DIFFS[S.diff] || DIFFS.normal).name;
+  C2.tr = chalD(S).r; C2.dm = chalM(S); C2.dn = (DIFFS[S.diff] || DIFFS.normal).name + '·' + (CTRLS[S.ctrl] || CTRLS.normal).name;
   if (C2.k === 'spike') C2.tgt = cornerTgt(T, 130, 230, 430, 560); // v1.81 스파이크도 과녁(구석)
   if (C2.k === 'recv') chalRecvSet(S, me);
   if (C2.k === 'serve') C2.tgt = cornerTgt(T, 160, 260, 450, 560); // v1.81 구석으로
@@ -1469,7 +1469,9 @@ function chalPoint(S, team, scorer) { // 도전 모드에서는 점수 대신 �
 }
 const CHAL_D = { easy: { m: 0.6, r: 1.35, rs: 1050, rc: 0.3, feint: 0, toss: 1.15 }, normal: { m: 1, r: 1, rs: 1280, rc: 0.6, feint: 0, toss: 1 }, hard: { m: 1.4, r: 0.8, rs: 1420, rc: 0.75, feint: 0.15, toss: 0.9 }, hell: { m: 1.8, r: 0.65, rs: 1560, rc: 0.9, feint: 0.25, toss: 0.8 } }; // v1.85 도전 난이도: m 점수 배율, r 과녁 크기, rs 리시브 스파이크 세기, rc 구석 확률, feint 페인트 확률, toss 스파이크 토스 높이
 function chalD(S) { return CHAL_D[S.diff] || CHAL_D.normal; }
-function chalAdd(S, raw) { const C2 = S.chal, b4 = C2.sc; C2.raw = (C2.raw || 0) + raw; C2.sc = Math.round(C2.raw * chalD(S).m); C2.best = C2.sc; return C2.sc - b4; } // 기본 점수 × 난이도 배율
+const CHAL_C = { easy: 0.6, normal: 1, pro: 1.5 }; // v1.87 조작 난이도 배율: 쉬움 < 보통 < 수동
+function chalM(S) { return chalD(S).m * (CHAL_C[S.ctrl] || 1); } // 점수 배율 = 난이도 × 조작
+function chalAdd(S, raw) { const C2 = S.chal, b4 = C2.sc; C2.raw = (C2.raw || 0) + raw; C2.sc = Math.round(C2.raw * chalM(S)); C2.best = C2.sc; return C2.sc - b4; } // 기본 점수 × 난이도 배율
 function tgtPts(b, g, hv, tr) { if (!g) return 0; const d = Math.hypot((b.x - g.x) / XS, (b.z - g.z) * 1.6) / (tr || 1), acc = d <= 15 ? 1 : Math.max(0, 1 - (d - 15) / 120), pow = clamp(((hv || 0) - 650) / 700, 0, 1); return Math.round(10 * acc * pow); } // v1.81 과녁 점수 = 정확도(가운데 1 ~ 135 밖 0) × 세기(살짝 친 공 0 ~ 풀파워 1), 최대 10점
 function cornerTgt(T, x0, x1, x2, x3) { return { x: oppD(T, Math.random() < 0.5 ? rnd(x0, x1) : rnd(x2, x3)), z: ZD * (Math.random() < 0.5 ? rnd(0.1, 0.25) : rnd(0.75, 0.9)) }; } // v1.81 과녁은 구석으로
 function chalRecvSet(S, me) { // v1.81 스파이크 리시브: 상대 한 명이 토스를 올려 강스파이크
