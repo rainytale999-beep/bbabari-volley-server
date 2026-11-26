@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'); // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.38'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.39'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -16,15 +16,15 @@ const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js
 /* v1.38 랭킹이 서버 재시작(자동 배포)마다 초기화되던 문제: 서버 폴더 위(/opt)는 서버 계정(ubuntu)이 쓸 수 없어 저장이 늘 실패했음
    → 서버 계정의 홈 폴더(/home/ubuntu/bbv_rank.json)에 저장. GitHub 배포와 상관없는 자리라 기록이 남는다. 저장 상태는 /health 에 표시 */
 const RANK_FILE = process.env.RANK_FILE || path.join(require('os').homedir(), 'bbv_rank.json'), CHAL_KINDS = ['serve', 'spike', 'rally'];
-let RK = { solo: {}, duel: {}, chal: { serve: {}, spike: {}, rally: {} } }, rkDirty = false; const rkSoloAt = new Map();
+let RK = { solo: {}, duel: {}, chal: { serve: {}, spike: {}, rally: {} }, shoot: {} }, rkDirty = false; const rkSoloAt = new Map();
 let rkSave = '아직 저장 안 함';
-try { const o = JSON.parse(fs.readFileSync(RANK_FILE, 'utf8')); if (o && o.solo) RK.solo = o.solo; if (o && o.duel) RK.duel = o.duel; if (o && o.chal) for (const c of CHAL_KINDS) RK.chal[c] = o.chal[c] || {}; rkSave = '불러옴'; }
+try { const o = JSON.parse(fs.readFileSync(RANK_FILE, 'utf8')); if (o && o.solo) RK.solo = o.solo; if (o && o.duel) RK.duel = o.duel; if (o && o.shoot) RK.shoot = o.shoot; if (o && o.chal) for (const c of CHAL_KINDS) RK.chal[c] = o.chal[c] || {}; rkSave = '불러옴'; }
 catch (e) { if (e.code === 'ENOENT') rkDirty = true; else rkSave = '불러오기 실패: ' + e.message; } // 파일이 없으면 바로 한 번 저장해서 쓸 수 있는 자리인지 확인
 setInterval(() => { if (!rkDirty) return; rkDirty = false; const tmp = RANK_FILE + '.tmp'; fs.writeFile(tmp, JSON.stringify(RK), e => { if (e) { rkDirty = true; rkSave = '저장 실패: ' + e.message; return console.error('rank save', e.message); }
   fs.rename(tmp, RANK_FILE, e2 => { rkSave = e2 ? '저장 실패: ' + e2.message : '저장 OK ' + new Date().toISOString().slice(11, 19); }); }); }, 10000).unref();
 const tkOk = k => typeof k === 'string' && /^[A-Za-z0-9+/=_.-]{8,128}$/.test(k);
 const rkName = n => String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 12) || '이름없음';
-function rkTab(type, kind) { return type === 'solo' ? RK.solo : type === 'duel' ? RK.duel : type === 'chal' && CHAL_KINDS.includes(kind) ? RK.chal[kind] : null; }
+function rkTab(type, kind) { return type === 'solo' ? RK.solo : type === 'duel' ? RK.duel : type === 'shoot' ? RK.shoot : type === 'chal' && CHAL_KINDS.includes(kind) ? RK.chal[kind] : null; }
 function rkTop(tab, k) { const all = Object.entries(tab).sort((a, b) => b[1].s - a[1].s || a[1].t - b[1].t); const i = tkOk(k) ? all.findIndex(e => e[0] === k) : -1;
   return { top: all.slice(0, 50).map(([kk, v]) => ({ n: v.n, s: v.s, me: kk === k ? 1 : 0 })), me: i >= 0 ? { r: i + 1, s: all[i][1].s } : null, total: all.length }; }
 function rankHttp(req, res) {
@@ -36,6 +36,8 @@ function rankHttp(req, res) {
     if (m && m.a === 'get') { const tab = rkTab(m.type, m.kind); if (tab) out = Object.assign({ ok: 1 }, rkTop(tab, m.k)); }
     else if (m && m.a === 'solo' && tkOk(m.k)) { const t = Date.now(), last = rkSoloAt.get(m.k) || 0; // 한 판은 아무리 빨라도 45초 넘게 걸린다
       if (t - last > 45000) { rkSoloAt.set(m.k, t); if (rkSoloAt.size > 20000) rkSoloAt.clear(); const o = RK.solo[m.k] || (RK.solo[m.k] = { n: '', s: 0, t: 0 }); o.s++; o.n = rkName(m.n); o.t = t; rkDirty = true; } out = { ok: 1 }; }
+    else if (m && m.a === 'shoot' && tkOk(m.k)) { const sc = Math.floor(+m.s); // v1.39 은하 대소동 최고 점수(한 판 끝날 때 앱이 보냄)
+      if (sc > 0 && sc <= 5000000) { const o = RK.shoot[m.k]; if (!o || sc > o.s) { RK.shoot[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } } out = { ok: 1 }; }
     else if (m && m.a === 'chal' && tkOk(m.k)) { const tab = rkTab('chal', m.kind), sc = Math.floor(+m.s); // 도전 점수 최대: 서브 30점, 스파이크 10연속, 랠리 30회
       if (tab && sc >= 0 && sc <= ({ serve: 30, spike: 10, rally: 30 })[m.kind]) { const o = tab[m.k]; if (!o || sc > o.s) { tab[m.k] = { n: rkName(m.n), s: sc, t: Date.now() }; rkDirty = true; } else if (o.n !== rkName(m.n)) { o.n = rkName(m.n); rkDirty = true; } out = { ok: 1 }; } }
     res.writeHead(200, hd); res.end(JSON.stringify(out)); });
@@ -59,7 +61,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
   if (u === '/shoot/rooms') return Shoot.roomsHttp(res); // 슈팅(빱찌 은하 대소동) 방 목록 — 배구 방 찾기에도 같이 보임
-  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('ok rooms=' + rooms.size + ' (경기 중 ' + [...rooms.values()].filter(r => r.S && !r.over).length + ') | 격투 방 ' + Fight.rooms.size + ' | 슈팅 방 ' + Shoot.rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 랭킹 솔로 ' + Object.keys(RK.solo).length + '명 · 대전 ' + Object.keys(RK.duel).length + '명 · ' + rkSave + ' | 서버 v' + SERVER_VER); } // 진단용
+  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('ok rooms=' + rooms.size + ' (경기 중 ' + [...rooms.values()].filter(r => r.S && !r.over).length + ') | 격투 방 ' + Fight.rooms.size + ' | 슈팅 방 ' + Shoot.rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 랭킹 솔로 ' + Object.keys(RK.solo).length + '명 · 대전 ' + Object.keys(RK.duel).length + '명 · 은하 ' + Object.keys(RK.shoot).length + '명 · ' + rkSave + ' | 서버 v' + SERVER_VER); } // 진단용
   const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
