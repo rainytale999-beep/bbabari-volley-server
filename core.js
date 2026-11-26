@@ -338,7 +338,7 @@ function touch(S, p, kind) {
   if (kind === 'block') { b.lastTeam = p.team; b.touches = 0; }
   else if (b.lastTeam === p.team) b.touches++; else { b.lastTeam = p.team; b.touches = 1; }
   b.full = false; b.out = false; b.ultra = false; b.srv = false; b.setBy = -1; b.lastP = p.i; b.noP = kind === 'bump' || kind === 'spike' ? p.i : -1; b.serial++; b.teamCd = 0.2; p.hitCd = 0.3; p.hitDone = true; S.rallyHits++; // 블로킹·몸에 맞은 공은 같은 사람이 이어서 쳐도 된다
-  if (S.chal && S.chal.k === 'rally' && !p.bot && kind !== 'block' && S.phase === 'rally') { S.chal.sc += p.perfect ? 3 : 1; S.chal.best = S.chal.sc; if (p.perfect) ev(S, 'txt', p.x, p.y - 190, p.z, '+3 나이스!', 1); } // v1.81 랠리 점수
+  if (S.chal && S.chal.k === 'rally' && !p.bot && kind !== 'block' && S.phase === 'rally') { const dp = chalAdd(S, p.perfect ? 3 : 1); if (p.perfect) ev(S, 'txt', p.x, p.y - 190, p.z, '+' + dp + ' 나이스!', 1); } // v1.81 랠리 점수
   if (b.touches > 3) { ev(S, 'txt', b.x, b.y - 40, b.z, '포 히트! (4번 터치)', 2); point(S, 1 - p.team, -1); return false; }
   return true;
 }
@@ -1450,23 +1450,27 @@ function chalMe(S) { return S.players.find(q => !q.bot) || S.players[0]; }
 function chalServe(S) { // 서브 시작 때 도전 모드 준비
   const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball; C2.side = -1;
   for (const q of S.players) { q.gone = C2.k !== 'rally' && q.team !== T; q.chalSpk = false; }
+  C2.tr = chalD(S).r; C2.dm = chalD(S).m; C2.dn = (DIFFS[S.diff] || DIFFS.normal).name;
   if (C2.k === 'spike') C2.tgt = cornerTgt(T, 130, 230, 430, 560); // v1.81 스파이크도 과녁(구석)
   if (C2.k === 'recv') chalRecvSet(S, me);
   if (C2.k === 'serve') C2.tgt = cornerTgt(T, 160, 260, 450, 560); // v1.81 구석으로
   if (C2.k === 'spike') { S.phase = 'rally'; S.phaseT = 0; b.held = false; b.lastTeam = T; b.lastP = -1; b.noP = -1; b.touches = 1; b.chain = 1; S.rallyHits = 1; b.serial++; b.teamCd = 0;
-    me.x = netD(T, 260); me.z = ZD / 2; b.x = netD(T, 620); b.y = GY - 160; b.z = ZD / 2 + rnd(-60, 60); lob(S, b, netD(T, rnd(70, 130)), b.z, GY - 300, GY - 560); ev(S, 'txt', b.x, b.y - 60, b.z, '토스!', 0); }
+    me.x = netD(T, 260); me.z = ZD / 2; b.x = netD(T, 620); b.y = GY - 160; b.z = ZD / 2 + rnd(-60, 60) / chalD(S).toss; lob(S, b, netD(T, rnd(70, 130)), b.z, GY - 300, GY - 300 - 260 * chalD(S).toss); /* v1.85 어려울수록 토스가 낮고 빠름 */ ev(S, 'txt', b.x, b.y - 60, b.z, '토스!', 0); }
 }
 function chalPoint(S, team, scorer) { // 도전 모드에서는 점수 대신 기록을 센다
   const C2 = S.chal, me = chalMe(S), b = S.ball, ok = team === me.team; let end = false;
-  if (C2.k === 'serve' || C2.k === 'spike') { const isS = C2.k === 'spike', pts = ok && (!isS || b.lastKind === 'spike') ? tgtPts(b, C2.tgt, C2.hv) : 0; // v1.81 과녁 점수(가운데 10점 ~ 바깥 0점)
-    C2.sc += pts; C2.n++; ev(S, 'txt', b.x, 220, b.z, pts ? '+' + pts + (pts >= 9 ? ' 완벽!' : '') : isS && ok && b.lastKind !== 'spike' ? '스파이크로 때려야 점수!' : ok && tgtPts(b, C2.tgt, 1350) > 0 ? '더 세게!' : '빗나감', pts ? 1 : 3, 1); if (C2.n >= 10) end = true; }
+  if (C2.k === 'serve' || C2.k === 'spike') { const isS = C2.k === 'spike', pts = ok && (!isS || b.lastKind === 'spike') ? tgtPts(b, C2.tgt, C2.hv, C2.tr) : 0; // v1.81 과녁 점수(가운데 10점 ~ 바깥 0점)
+    const dp = chalAdd(S, pts); C2.n++; ev(S, 'txt', b.x, 220, b.z, pts ? '+' + dp + (pts >= 9 ? ' 완벽!' : '') : isS && ok && b.lastKind !== 'spike' ? '스파이크로 때려야 점수!' : ok && tgtPts(b, C2.tgt, 1350, C2.tr) > 0 ? '더 세게!' : '빗나감', pts ? 1 : 3, 1); if (C2.n >= 10) end = true; }
   else if (C2.k === 'recv') { if (!C2.got) { C2.n++; ev(S, 'txt', NETX, 230, ZD / 2, '놓쳤다… 0점', 3, 1); } C2.got = 0; if (C2.n >= 10) end = true; }
-  else { C2.n++; if (C2.cur >= 30) C2.sc += 10; ev(S, 'txt', NETX, 230, ZD / 2, (C2.cur >= 30 ? '30회 돌파!! +10 · ' : '랠리 ' + C2.cur + '회 · ') + '점수 ' + C2.sc, C2.cur >= 30 ? 1 : 3, 1); if (C2.n >= 3) end = true; C2.cur = 0; }
+  else { C2.n++; const bd = C2.cur >= 30 ? chalAdd(S, 10) : 0; ev(S, 'txt', NETX, 230, ZD / 2, (C2.cur >= 30 ? '30회 돌파!! +' + bd + ' · ' : '랠리 ' + C2.cur + '회 · ') + '점수 ' + C2.sc, C2.cur >= 30 ? 1 : 3, 1); if (C2.n >= 3) end = true; C2.cur = 0; }
   C2.best = C2.sc;
   S.phase = 'point'; S.phaseT = 0; S.pointTeam = team; S.slowT = 0;
   if (end) { C2.done = 1; S.winner = me.team; }
 }
-function tgtPts(b, g, hv) { if (!g) return 0; const d = Math.hypot((b.x - g.x) / XS, (b.z - g.z) * 1.6), acc = d <= 15 ? 1 : Math.max(0, 1 - (d - 15) / 120), pow = clamp(((hv || 0) - 650) / 700, 0, 1); return Math.round(10 * acc * pow); } // v1.81 과녁 점수 = 정확도(가운데 1 ~ 135 밖 0) × 세기(살짝 친 공 0 ~ 풀파워 1), 최대 10점
+const CHAL_D = { easy: { m: 0.6, r: 1.35, rs: 1050, rc: 0.3, feint: 0, toss: 1.15 }, normal: { m: 1, r: 1, rs: 1280, rc: 0.6, feint: 0, toss: 1 }, hard: { m: 1.4, r: 0.8, rs: 1420, rc: 0.75, feint: 0.15, toss: 0.9 }, hell: { m: 1.8, r: 0.65, rs: 1560, rc: 0.9, feint: 0.25, toss: 0.8 } }; // v1.85 도전 난이도: m 점수 배율, r 과녁 크기, rs 리시브 스파이크 세기, rc 구석 확률, feint 페인트 확률, toss 스파이크 토스 높이
+function chalD(S) { return CHAL_D[S.diff] || CHAL_D.normal; }
+function chalAdd(S, raw) { const C2 = S.chal, b4 = C2.sc; C2.raw = (C2.raw || 0) + raw; C2.sc = Math.round(C2.raw * chalD(S).m); C2.best = C2.sc; return C2.sc - b4; } // 기본 점수 × 난이도 배율
+function tgtPts(b, g, hv, tr) { if (!g) return 0; const d = Math.hypot((b.x - g.x) / XS, (b.z - g.z) * 1.6) / (tr || 1), acc = d <= 15 ? 1 : Math.max(0, 1 - (d - 15) / 120), pow = clamp(((hv || 0) - 650) / 700, 0, 1); return Math.round(10 * acc * pow); } // v1.81 과녁 점수 = 정확도(가운데 1 ~ 135 밖 0) × 세기(살짝 친 공 0 ~ 풀파워 1), 최대 10점
 function cornerTgt(T, x0, x1, x2, x3) { return { x: oppD(T, Math.random() < 0.5 ? rnd(x0, x1) : rnd(x2, x3)), z: ZD * (Math.random() < 0.5 ? rnd(0.1, 0.25) : rnd(0.75, 0.9)) }; } // v1.81 과녁은 구석으로
 function chalRecvSet(S, me) { // v1.81 스파이크 리시브: 상대 한 명이 토스를 올려 강스파이크
   const C2 = S.chal, T = me.team, O = 1 - T, b = S.ball, sp = S.players.find(q => q.team === O);
@@ -1485,16 +1489,18 @@ function chalRecvStep(S) { // 상대 스파이커: 공이 내려오면 뛰어서
     if (sp.act !== 'idle' && sp.act !== 'charge') { sp.actT += DT; if (sp.actT > 0.36) { sp.act = 'idle'; sp.actT = 0; } } }
   if (C2.fired || S.phase !== 'rally' || b.lastTeam === T || b.vy < 0 || b.y < GY - 420) return;
   C2.fired = 1; if (sp) { sp.act = 'spike'; sp.actT = 0; sp.chg = 0; }
-  const cr = Math.random() < 0.6, tx = cr ? (Math.random() < 0.5 ? rnd(70, 160) : rnd(470, 570)) : rnd(120, 520), tz = cr ? (Math.random() < 0.5 ? rnd(30, ZD * 0.22) : rnd(ZD * 0.78, ZD - 30)) : rnd(40, ZD - 40); // 60%는 네 구석, 40%는 아무 데나
+  const CD = chalD(S), cr = Math.random() < CD.rc, tx = cr ? (Math.random() < 0.5 ? rnd(70, 160) : rnd(470, 570)) : rnd(120, 520), tz = cr ? (Math.random() < 0.5 ? rnd(30, ZD * 0.22) : rnd(ZD * 0.78, ZD - 30)) : rnd(40, ZD - 40); // 60%는 네 구석, 40%는 아무 데나
   b.lastKind = 'spike'; b.lastTeam = 1 - T; b.lastP = sp ? sp.i : -1; b.noP = -1; b.touches = 0; b.chain = 0; b.nice = 0; b.serial++; b.teamCd = 0.15; b.sup = null; b.home = 0; b.float = 0; b.out = false; b.full = false;
-  drive(S, b, netD(T, tx), tz, GY - BR, Math.min(1500, 1280 + C2.n * 25)); b.power = true; S.rallyHits++;
+  S.rallyHits++;
+  if (Math.random() < CD.feint) { b.lastKind = 'bump'; lob(S, b, netD(T, rnd(60, 150)), tz, GY - BR, GY - 420); b.power = false; ev(S, 'txt', b.x, b.y - 60, b.z, '페인트!', 2); return; } // v1.85 어려움·지옥: 가끔 살짝 넘기는 속임수
+  drive(S, b, netD(T, tx), tz, GY - BR, CD.rs + Math.min(220, C2.n * 25)); b.power = true; // v1.85 난이도별 세기
   ev(S, 'spike', b.x, b.y, b.z, 0, -1); ev(S, 'hit', b.x, b.y, b.z, 3, -1); S.stopT = 0.06;
 }
 function chalRecvHit(S, p, perfect, err, stag) { // 리시브 점수: 나이스 타이밍(빨리 누를수록) 7~10점, 보통 5, 겨우 3, 휘청 1, 아웃 0
   const C2 = S.chal, b = S.ball; if (C2.got) return;
   const pts = b.out ? 0 : perfect ? Math.max(7, 10 - Math.round((p.pfK || 0) * 3)) : stag ? 1 : err >= 95 ? 3 : 5;
-  C2.got = 1; C2.n++; C2.sc += pts; C2.best = C2.sc;
-  ev(S, 'txt', p.x, p.y - 190, p.z, pts ? '+' + pts + (pts >= 9 ? ' 완벽한 리시브!' : perfect ? ' 나이스 리시브!' : pts >= 3 ? ' 리시브 성공' : ' 겨우 받았다') : '아웃… 0점', pts ? 1 : 3, 1);
+  C2.got = 1; C2.n++; const dp = chalAdd(S, pts);
+  ev(S, 'txt', p.x, p.y - 190, p.z, pts ? '+' + dp + (pts >= 9 ? ' 완벽한 리시브!' : perfect ? ' 나이스 리시브!' : pts >= 3 ? ' 리시브 성공' : ' 겨우 받았다') : '아웃… 0점', pts ? 1 : 3, 1);
   S.phase = 'point'; S.phaseT = 0; S.pointTeam = p.team; S.slowT = 0;
   if (C2.n >= 10) { C2.done = 1; S.winner = p.team; }
 }

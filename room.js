@@ -87,7 +87,7 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
   return 'bad';
 }
 function pickStage(room) { return room.stage === 'random' ? RC.STAGES[Math.floor(Math.random() * RC.STAGES.length)].id : room.stage; }
-function gameCfg(room, stage) { rollBots(room); markUsed(room); return { boss: room.boss || '', chal: room.chal || '', stage, target: room.target, diff: room.chal === 'rally' ? 'easy' : room.diff, ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ role: s.role || 'all', ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
+function gameCfg(room, stage) { rollBots(room); markUsed(room); return { boss: room.boss || '', chal: room.chal || '', stage, target: room.target, diff: room.diff, /* v1.85 랠리 도전도 고른 난이도의 PC */ ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ role: s.role || 'all', ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
 function metaOf(room, stage) { return { boss: room.boss || '', n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), roles: room.slots.map(s => room.n === 1 ? 'all' : s.role || 'all'), bots: room.slots.map(s => s.kind === 'bot'), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
 function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
