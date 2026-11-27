@@ -1339,6 +1339,8 @@ function step(S) {
   if (b.out && S.phase === 'rally' && S.pred && S.pred.land && (S.pred.land.x < 0 || S.pred.land.x > CW)) for (const p of S.players) if (p.bot && p.team !== b.lastTeam) p.inp = 0; // PC는 나가는 서브를 건드리지 않고 지켜본다
   for (const p of S.players) stepPlayer(S, p);
   if (S.chal && S.chal.k === 'recv') chalRecvStep(S);
+  if (S.chal && S.chal.tgt && S.chal.tr0 && (S.chal.k === 'serve' || S.chal.k === 'spike') && !S.chal.frz) { // v1.92 과녁이 시간이 갈수록 조금씩 작아짐(치는 순간 고정)
+    const C2 = S.chal, me = chalMe(S); if (C2.k === 'serve' ? S.phase !== 'serve' : S.ball.lastP === me.i) C2.frz = true; else { C2.el += DT; C2.tr = C2.tr0 * Math.max(0.5, 1 - C2.el * 0.14); } }
   if (S.chal && S.chal.hser !== S.ball.serial && !S.ball.held) { const b = S.ball; S.chal.hser = b.serial; S.chal.hv = Math.hypot(b.vx, b.vz) + Math.max(0, b.vy) * 0.6; } // v1.81 친 직후 공 세기(과녁 점수용)
   if (S.chal && S.chal.k === 'rally' && S.phase === 'rally') { const sd = sideOf(S.ball.x); if (S.chal.side >= 0 && sd !== S.chal.side) S.chal.cur++; S.chal.side = sd; } // 랠리 횟수(네트를 넘을 때마다)
   for (let i = 0; i < S.players.length; i++) for (let j = i + 1; j < S.players.length; j++) { // v0.55 같은 편끼리 겹치지 않게 살짝 밀어낸다
@@ -1450,7 +1452,7 @@ function chalMe(S) { return S.players.find(q => !q.bot) || S.players[0]; }
 function chalServe(S) { // 서브 시작 때 도전 모드 준비
   const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball; C2.side = -1;
   for (const q of S.players) { q.gone = C2.k !== 'rally' && q.team !== T; q.chalSpk = false; }
-  C2.tr = chalD(S).r; C2.dm = chalM(S); C2.dn = (DIFFS[S.diff] || DIFFS.normal).name + '·' + (CTRLS[S.ctrl] || CTRLS.normal).name;
+  C2.tr = C2.tr0 = chalD(S).r; C2.el = 0; C2.frz = false; C2.dm = chalM(S); C2.dn = (DIFFS[S.diff] || DIFFS.normal).name + '·' + (CTRLS[S.ctrl] || CTRLS.normal).name;
   if (C2.k === 'spike') C2.tgt = cornerTgt(T, 130, 230, 430, 560); // v1.81 스파이크도 과녁(구석)
   if (C2.k === 'recv') chalRecvSet(S, me);
   if (C2.k === 'serve') C2.tgt = cornerTgt(T, 160, 260, 450, 560); // v1.81 구석으로
