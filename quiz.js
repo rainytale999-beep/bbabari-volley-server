@@ -62,7 +62,7 @@ function onMsg(ws, m) {
     if (ws.room) leaveRoom(ws);
     if (rooms.size >= MAX_ROOMS) return send(ws, { t: 'err', m: '방이 가득 찼어요. 잠시 뒤에 다시 시도해 주세요.' });
     const r = { id: newId(), title: str(m.title, 20) || (ws.name || '빱알이') + '의 시험장', pw: str(m.pw, 12), spec: m.spec !== false, host: ws,
-      seats: new Array(MAX_SEAT).fill(null), ready: new Array(MAX_SEAT).fill(false), specs: [], cfg: { mode: 'surv', diff: 'normal', count: 30 }, run: null };
+      seats: new Array(MAX_SEAT).fill(null), ready: new Array(MAX_SEAT).fill(false), specs: [], cfg: { mode: 'surv', diff: 'normal', count: 20, demo: true }, run: null }; // v1.57 기본 20문제(전 30), 정답 시범 켜기
     r.seats[0] = ws; ws.ch = freeCh(r, ws.ch, ws); rooms.set(r.id, r); ws.room = r.id; return pushInfo(r);
   }
   if (t === 'join') {
@@ -87,7 +87,7 @@ function onMsg(ws, m) {
       else { const free = r.seats.indexOf(null); if (si < 0 && free >= 0) { r.specs = r.specs.filter(s => s !== ws); r.seats[free] = ws; ws.ch = freeCh(r, ws.ch, ws); } }
       return pushInfo(r); }
     if (t === 'ready') { if (si >= 0 && ws !== r.host) { r.ready[si] = !!m.on; pushInfo(r); } return; }
-    if (t === 'cfg') { if (ws !== r.host) return; const c = r.cfg; if (MODES.includes(m.mode)) c.mode = m.mode; if (DIFFS.includes(m.diff)) c.diff = m.diff; if (COUNTS.includes(m.count)) c.count = m.count; if (typeof m.spec === 'boolean') r.spec = m.spec; return pushInfo(r); }
+    if (t === 'cfg') { if (ws !== r.host) return; const c = r.cfg; if (MODES.includes(m.mode)) c.mode = m.mode; if (DIFFS.includes(m.diff)) c.diff = m.diff; if (COUNTS.includes(m.count)) c.count = m.count; if (typeof m.spec === 'boolean') r.spec = m.spec; if (typeof m.demo === 'boolean') c.demo = m.demo; return pushInfo(r); }
     if (t === 'start') {
       if (ws !== r.host) return;
       const idx = r.seats.map((s, i) => s ? i : -1).filter(i => i >= 0); if (!idx.length) return send(ws, { t: 'err', m: '자리에 앉은 사람이 없어요.' });
@@ -96,7 +96,7 @@ function onMsg(ws, m) {
       const pl = idx.map(i => r.seats[i]);
       let pool = null; for (const p of pl) { const ids = new Map((p.gl || []).map(g => [g[0], g[1]])); pool = pool ? pool.filter(g => ids.has(g[0])) : [...ids].map(([id, c]) => [id, c]); }
       pool = (pool || []).filter(g => g[0] < 900); if (pool.length < 3) return send(ws, { t: 'err', m: '게임 버전이 서로 달라요. 모두 새로고침(Ctrl+F5) 해 주세요.' });
-      const cfg = { mode: r.cfg.mode, diff: r.cfg.diff, count: r.cfg.count, seed: (Math.random() * 4294967295) >>> 0, pool, special: pl.length > 1 };
+      const cfg = { mode: r.cfg.mode, diff: r.cfg.diff, count: r.cfg.count, demo: r.cfg.demo !== false, seed: (Math.random() * 4294967295) >>> 0, pool, special: pl.length > 1 };
       const R = QRUN.create(cfg, pl.map(p => ({ name: p.name, ch: p.ch })));
       r.run = { R, pl, cfg, timer: null, jamUsed: new Set() };
       for (const w of members(r)) send(w, startMsg(r, w));

@@ -22,7 +22,7 @@
     let cands = pool.filter(g => !R.used.has(g[0]) && g[1] !== R.lastCtrl);
     if (!cands.length) cands = pool.filter(g => !R.used.has(g[0]));
     if (!cands.length) { R.used.clear(); for (const id of R.recent.slice(-6)) R.used.add(id); cands = pool.filter(g => !R.used.has(g[0]) && g[1] !== R.lastCtrl); if (!cands.length) cands = pool; }
-    const g = cands[Math.floor(R.rnd() * cands.length)]; R.used.add(g[0]); R.recent.push(g[0]); R.lastCtrl = g[1]; return g[0];
+    let g = cands[Math.floor(R.rnd() * cands.length)]; if (g[1] === 'mash' && R.rnd() < 0.5) { const nm = cands.filter(x => x[1] !== 'mash'); if (nm.length) g = nm[Math.floor(R.rnd() * nm.length)]; } /* v1.57 연타 문제는 절반 확률로 다른 문제로(손가락 피로) */ R.used.add(g[0]); R.recent.push(g[0]); R.lastCtrl = g[1]; return g[0];
   }
   function alive(R) { const a = []; R.players.forEach((p, i) => { if (!R.out[i] && !R.gone[i]) a.push(i); }); return a; }
   /* 다음 문제 → { n, id, stage, seed, special } (끝났으면 null) */
