@@ -463,7 +463,11 @@ function hitBump(S, p, viaDive) {
   else if (perfect) { S.stopT = 0.03; ev(S, 'hit', b.x, b.y, b.z, 1, p.i); ev(S, 'bump', b.x, b.y, b.z, 3); ev(S, 'txt', p.x, p.y - 150, p.z, wasOpp ? '나이스 리시브!' : '나이스 토스!', 1); }
   else ev(S, 'bump', b.x, b.y, b.z, 0);
 }
+function spkStart(p, inp) { // v1.95 스파이크 과녁 시작 자리: 누르고 있는(없으면 움직이던) 방향 기준 평소 스파이크 자리
+  const d = dirKeys(p, inp), f = fdir(p), fw = d.fwd || (!d.back && p.vx * f > 60), bk = d.back || (!d.fwd && p.vx * f < -60), fa = d.far || (!d.near && p.vz < -60), ne = d.near || (!d.far && p.vz > 60);
+  return [fw ? 525 : bk ? 185 : 350, fa ? ZD * 0.18 : ne ? ZD * 0.82 : p.z]; }
 function spikeAim(p, inp) { // 방향키로 고른 스파이크 목표(오차 없이). 화면의 조준 표시에도 쓴다
+  if (!p.bot && p.spkOn && p.spkSx != null) return { x: clamp(oppD(p.team, p.spkSx), 50, CW - 50), z: cz(p.spkSz) }; // v1.94 과녁
   const d = aimKeys(p, inp), dist = d.fwd ? 525 : d.back ? 185 : 350;
   return { x: clamp(oppD(p.team, dist), 50, CW - 50), z: cz(laneZ(p, d, p.z)) };
 }
@@ -482,6 +486,7 @@ function shotPreview(S, p, inp) { // 내 서브·스파이크가 날아갈 길(�
 }
 function spikeTarget(S, p, d, acc) { // acc: 오차 배율(연결 공격이면 작아진다)
   acc = acc || 1; const T = p.team, c = chOf(p), e = rnd(-1, 1) * (16 + (6 - tq(c)) * 16) * acc * (2 - balK(p)), ez = rnd(-1, 1) * (10 + (6 - tq(c)) * 11) * acc * (2 - balK(p));
+  if (!p.bot && p.spkOn && p.spkSx != null) return { x: clamp(oppD(T, p.spkSx) + e * 0.7, 50, CW - 50), z: cz(p.spkSz + ez * 0.7) }; // v1.94 사람이 정한 과녁(오차 조금 작게)
   const dist = d.fwd ? 525 : d.back ? 185 : 350;
   return { x: clamp(oppD(T, dist) + e, 50, CW - 50), z: cz(laneZ(p, d, p.z) + ez) };
 }
@@ -791,6 +796,10 @@ function trySuper(S, p) {
 }
 
 /* ---------- 서브 ---------- */
+const SRV_LIMIT = 9, SRV_OSC = 0.75; // v1.94 서브 제한 시간, 세기 게이지 한 번 오르는 시간
+function srvKind(g) { return g < 0.34 ? 0 : g < 0.67 ? 1 : 2; } // 0 언더, 1 플로터, 2 점프 강서브
+function srvRelease(S, p, inp) { const g = p.chg || 0, k = srvKind(g); p.act = 'idle'; p.chg = 0;
+  if (k === 2) { p.act = 'charge'; doServe(S, p, true, inp, 0.5 + (g - 0.67) / 0.33 * 0.5); } else doServe(S, p, false, inp, 0, k === 1); }
 function doServe(S, p, power, inp, chg, flt) {
   const b = S.ball, c = chOf(p), d = aimKeys(p, inp), T = p.team, f = fdir(p);
   b.held = false; b.lastTeam = T; b.lastP = p.i; b.noP = p.i; b.touches = 0; b.serial++; b.teamCd = 0.3; p.hitCd = 0.4; b.out = false; b.srv = true; b.ceilFault = false; tire(p, power ? 2 : 0.5);
@@ -825,8 +834,9 @@ function predMove(S, p, inp, edge) {
   const c = chOf(p), s = p.st, inc = busy(p), ice = S.ice[p.team] > 0, ck = ctl(S, p), b = S.ball, serving = S.phase === 'serve' && S.server === p.i;
   let mx = 0, mz = 0;
   if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
-  if (serving) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
-  const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc;
+  if (serving) { mx = 0; if (p.act === 'charge') mz = 0; } // v1.94 stepPlayer 와 같음
+  const spkAim = !serving && !p.gnd && p.act === 'charge' && !inc;
+  const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc;
   if (aimAir) {
     const ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
     if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
@@ -834,8 +844,9 @@ function predMove(S, p, inp, edge) {
       mx = clamp((tx - p.x) / 30, -1, 1) * ak; mz = clamp((tz - p.z) / 24, -1, 1) * ak * AIR_ZK; /* v1.40 점프 중 공 근처에서는 방향키로 몸이 움직이지 않고 자동 이동만(방향키는 때릴 곳만 고름). v1.39: 방향키 12%, 그 전 70% */ /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
+  if (spkAim) { mx = 0; mz = 0; }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
-  if (!aimAir && ck.assist > 0 && !inc && !serving && p.act !== 'dive' && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
+  if (!aimAir && !spkAim && ck.assist > 0 && !inc && !serving && p.act !== 'dive' && S.phase === 'rally' && !(inp & (K.U | K.D)) && !noTouch(S, p)) {
     const L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < DEP_R) tz = L.z; }
     if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? DEP_K : DEP_AIR) * ck.assist);
@@ -866,7 +877,7 @@ function predMove(S, p, inp, edge) {
   const canAct = !inc && !jumped && (p.act === 'idle' || p.act === 'charge' || (p.act !== 'dive' && p.actT > 0.2));
   if (canAct && S.phase === 'rally') {
     let press = edge;
-    if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle') press |= K.S; } }
+    if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) p.jumpHold = false; } // v1.94 S 한 번 = 점프만
     if ((edge & K.X) && p.gauge >= 100) { /* 필살기는 서버 결과를 기다린다 */ }
     else if (press & K.A) {
       const mate = p.gnd && !ballNear(S, p, 1.6) ? S.players.find(q => q.i !== p.i && q.team === p.team && (q.st.down > 0.3 || q.ko) && Math.hypot(q.x - p.x, q.z - p.z) < 80 * XS) : null;
@@ -882,7 +893,7 @@ function predMove(S, p, inp, edge) {
       if (blk) { p.act = 'block'; p.actT = 0; } else { p.act = 'charge'; p.actT = 0; p.chg = 0; }
     }
   }
-  if (p.act === 'charge') { if (serving) { /* 서브 모으기는 서버만 */ } else if (inp & K.S) p.chg = Math.min(1, (p.chg || 0) + DT / (p.bot ? 0.42 : SPK_CHG)); else { p.act = 'spike'; p.actT = 0; } }
+  if (p.act === 'charge') { if (serving) { /* 서브 모으기는 서버만 */ } else if (inp & K.S) p.chg = Math.min(1, (p.chg || 0) + DT / (p.bot ? 0.42 : SPK_CHG)); else { p.act = 'spike'; p.actT = 0; } } // (공이 지나갈 때 자동으로 때리는 것은 서버가 정한다)
   else if (p.act !== 'idle') { p.actT += DT; const dur = p.act === 'bump' ? 0.32 : p.act === 'spike' ? 0.36 : p.act === 'super' ? 0.55 : p.act === 'dive' ? (S.env.sand ? 0.62 : 0.82) : 9; if (p.actT >= dur) { p.act = 'idle'; p.actT = 0; } }
 }
 const SUP_ST = new Set(['giant', 'shrink', 'half', 'float', 'wrap', 'boost', 'sleep']);
@@ -928,10 +939,11 @@ function stepPlayer(S, p) {
   const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1) * (toSrv ? 1.7 : 1), ice = S.ice[p.team] > 0;
   if (reset) { const h = home(S, p); mx = Math.abs(h[0] - p.x) < 10 ? 0 : (h[0] > p.x ? 1 : -1); mz = Math.abs(h[1] - p.z) < 10 ? 0 : (h[1] > p.z ? 1 : -1); inp = 0; }
   else if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
-  if (serving && !reset) { const hx = netD(p.team, SRV); if ((p.x - hx) * mx > 0 && Math.abs(p.x - hx) > 28 * XS) mx = 0; }
+  if (serving && !reset) { mx = 0; if (p.act === 'charge') mz = 0; } // v1.94 서브: 캐릭터는 끝선을 따라 ↑↓만(←→는 과녁만), 세기 정하는 동안은 멈춤
   const ck = ctl(S, p);
   // 스파이크 조준: S로 뛰어 힘을 모으는(또는 휘두르는) 동안에는 공을 칠 자리로 저절로 날아가고, 방향키는 때릴 곳(상대 코트)만 고른다
-  const aimAir = !p.bot && ck.assist > 0 && !p.gnd && (p.act === 'charge' || p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc && !reset && s.puppet <= 0 && s.wrap <= 0 && s.float <= 0;
+  const spkAim = !p.bot && !serving && !p.gnd && p.act === 'charge' && !inc; // v1.94 스파이크: S를 다시 꾹 누르는 동안 몸은 멈추고 방향키는 과녁만
+  const aimAir = !p.bot && ck.assist > 0 && !p.gnd && (p.act === 'spike' || (p.jumpHold && p.act === 'idle')) && !serving && !inc && !reset && s.puppet <= 0 && s.wrap <= 0 && s.float <= 0;
   if (aimAir) {
     const b = S.ball, ux = mx, uz = mz, ak = AIR_K * Math.min(1.08, ck.assist / 1.12); /* v1.21 도움을 약하게: 방향키 + 끄는 힘 일부 */
     if (S.phase === 'rally' && !b.held && !b.cap && !noTouch(S, p) && (sideOf(b.x) === p.team || Math.abs(b.x - NETX) < 90 * XS) && Math.abs(b.x - p.x) < AIR_R * XS) {
@@ -939,8 +951,9 @@ function stepPlayer(S, p) {
       mx = clamp((tx - p.x) / 30, -1, 1) * ak; mz = clamp((tz - p.z) / 24, -1, 1) * ak * AIR_ZK; /* v1.40 점프 중 공 근처에서는 방향키로 몸이 움직이지 않고 자동 이동만(방향키는 때릴 곳만 고름). v1.39: 방향키 12%, 그 전 70% */ /* v1.22 앞뒤 끌기는 더 약하게 */
     }
   }
+  if (spkAim) { mx = 0; mz = 0; }
   if (mx && mz && !aimAir) { mx *= 0.7071; mz *= 0.7071; }
-  if (!aimAir && !p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D)) && !noTouch(S, p)) { // 깊이 자동 맞춤
+  if (!aimAir && !spkAim && !p.bot && ck.assist > 0 && !inc && !reset && !serving && p.act !== 'dive' && S.phase === 'rally' && s.puppet <= 0 && s.wrap <= 0 && !(inp & (K.U | K.D)) && !noTouch(S, p)) { // 깊이 자동 맞춤
     const b = S.ball, L = S.pred && S.pred.land; let tz = null;
     if (!b.held && !b.cap) {
       if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z;
@@ -968,7 +981,8 @@ function stepPlayer(S, p) {
     const F = fdir(p) > 0 ? K.R : K.L, Bk = F === K.R ? K.L : K.R;
     if (!p.aimOn) { p.aimOn = true; p.aimX = inp & F ? 1 : inp & Bk ? -1 : 0; p.aimZ = inp & K.U ? -1 : inp & K.D ? 1 : 0; p.aimSx = 350; p.aimSz = p.aimSz0 = p.z; }
     else if (!serving && !((inp & K.S) || p.jumpHold || p.act === 'charge' || p.act === 'spike')) { /* v1.89 스파이크도 S를 누른(힘 모으기) 뒤에는 조준 칸 고정 */ if (edge & F) p.aimX = Math.min(1, p.aimX + 1); if (edge & Bk) p.aimX = Math.max(-1, p.aimX - 1); if (edge & K.U) p.aimZ = Math.max(-1, p.aimZ - 1); if (edge & K.D) p.aimZ = Math.min(1, p.aimZ + 1); }
-    if (serving && p.aimOn && !((inp & K.S) || p.act === 'charge' || !p.gnd || p.srvA > 0)) { /* v1.88 S(점프 서브)·A(서브)를 누른 뒤에는 떨어질 곳이 고정 — 방향키를 눌러도 안 움직임 */ /* v1.36 서브 조준: 칸으로 정하지 않고 방향키를 누르고 있는 동안 떨어질 곳이 부드럽게 움직인다(상대 코트 어디든) */ if (inp & F) p.aimSx += 330 * DT; if (inp & Bk) p.aimSx -= 330 * DT; if (inp & K.U) p.aimSz -= ZD * 0.85 * DT; if (inp & K.D) p.aimSz += ZD * 0.85 * DT; p.aimSx = clamp(p.aimSx, 110, 600); p.aimSz = clamp(p.aimSz, ZD * 0.08, ZD * 0.92); }
+    if (serving && p.aimOn && !((inp & K.S) || p.act === 'charge' || !p.gnd || p.srvA > 0)) { /* v1.94 서브 1단계: ←→ = 과녁 앞뒤, ↑↓ = 캐릭터가 끝선을 따라 이동(과녁도 같은 줄로 따라감) */ if (inp & F) p.aimSx += 330 * DT; if (inp & Bk) p.aimSx -= 330 * DT; p.aimSx = clamp(p.aimSx, 110, 600); p.aimSz = clamp(p.z, ZD * 0.08, ZD * 0.92); }
+    if (spkAim) { if (!p.spkOn) { p.spkOn = true; [p.spkSx, p.spkSz] = spkStart(p, inp); } if (inp & F) p.spkSx += 420 * DT; if (inp & Bk) p.spkSx -= 420 * DT; if (inp & K.U) p.spkSz -= ZD * 1.05 * DT; if (inp & K.D) p.spkSz += ZD * 1.05 * DT; p.spkSx = clamp(p.spkSx, 80, 600); p.spkSz = clamp(p.spkSz, ZD * 0.06, ZD * 0.94); } // v1.94 스파이크 과녁
   } else p.aimOn = false;
   { const b = S.ball; // v0.42 3단 콤보 찬스(v0.44: 리시브·토스 둘 다 나이스일 때만): 리시브→토스 공을 사람이 점프해서 노리면 1/3 속도로 약 1.5초(치는 순간·착지하면 끝)
     if (!p.bot && S.phase === 'rally' && !p.gnd && !S.slowCmb && S.slowSer !== b.serial && !b.held && !b.cap && !b.sup && b.lastTeam === p.team && b.chain >= 2 && b.nice >= 2 && (p.act === 'charge' || p.jumpHold) && sideOf(b.x) === p.team && Math.abs(b.x - p.x) < 320 * XS && !S.tut) {
@@ -997,7 +1011,7 @@ function stepPlayer(S, p) {
       else { p.vy = -p.vy * 0.42; p.vx *= 0.6; p.vz *= 0.6; ev(S, 'land', p.x, GY, p.z); }
     } else if (!p.gnd) {
       p.gnd = true; p.sky = false; if (p.vy > 500) ev(S, 'land', p.x, GY, p.z); if (chOf(p).id === 'dalgareum') p.st.moon = 0.7; /* v0.50 저중력: 착지 뒤 0.7초 빨라짐 */
-      if (p.act === 'spike' || p.act === 'block' || p.act === 'super' || p.act === 'charge' || p.act === 'bump') { p.act = 'idle'; p.chg = 0; }
+      if (p.act === 'spike' || p.act === 'block' || p.act === 'super' || p.act === 'charge' || p.act === 'bump') { p.act = 'idle'; p.chg = 0; } p.spkOn = false;
       if (p.fell) { p.fell = false; p.st.stun = Math.max(p.st.stun, 0.55 * cool(p)); hurt(S, p, 8); ev(S, 'bonk', p.x, p.y - 30, p.z, '쿵! 엉덩방아', 3); }
     }
     p.y = GY; p.vy = 0;
@@ -1025,7 +1039,7 @@ function stepPlayer(S, p) {
     const b = S.ball;
     let press = edge;
     if (p.bufA > 0) { press |= K.A; p.bufA = 0; }
-    if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle') press |= K.S; } } // S를 누른 채 뛰면 그대로 힘을 모은다
+    if (p.jumpHold) { if (!(inp & K.S) || p.gnd) p.jumpHold = false; else if (p.vy > -jumpV(p) * 0.8) { p.jumpHold = false; if (p.act === 'idle' && p.bot) press |= K.S; } } // v1.94 사람: S 한 번 = 점프만, 공중에서 S를 다시 꾹 = 조준(PC는 예전처럼 누른 채 뛰면 힘 모으기)
     const mate = p.gnd && !serving && S.phase === 'rally' && !ballNear(S, p, 1.6) ? S.players.find(q => q !== p && q.team === p.team && (q.st.down > 0.3 || q.ko) && Math.hypot(q.x - p.x, q.z - p.z) < 80 * XS) : null;
     if (mate && ((press & K.A) || (p.bot && (p.revCd = (p.revCd || 0) - DT) <= 0))) { mate.st.down = 0; mate.st.flat = 0; if (mate.ko) { mate.ko = false; mate.hp = Math.max(mate.hp, 30); } mate.hp = Math.min(100, mate.hp + 10); p.revCd = 1.5; ev(S, 'txt', mate.x, mate.y - 130, mate.z, '일으켜!', 1); press &= ~K.A; } // v0.55 쓰러진 팀원 옆에서 A
     if ((edge & K.X) && p.gauge >= 100 && !serving) trySuper(S, p);
@@ -1045,22 +1059,28 @@ function stepPlayer(S, p) {
     } else if ((press & K.S) && p.act !== 'charge' && (serving || !p.gnd)) {
       const blk = !serving && Math.abs(p.x - NETX) < 135 * XS && !b.held && !b.cap && ((b.lastTeam >= 0 && b.lastTeam !== p.team && sideOf(b.x) !== p.team) || (S.boss && S.boss.hold && p.team === 0)); // v1.37 보스가 공을 들고 있을 때도 블로킹(카운터)할 수 있게
       if (blk) { p.act = 'block'; p.actT = 0; p.hitDone = false; }
-      else { p.act = 'charge'; p.actT = 0; p.chg = 0; p.chgHold = 0; }
+      else { p.act = 'charge'; p.actT = 0; p.chg = 0; p.chgHold = 0; p.chgT = 0; p.sDist = 1e9; p.spkOn = false; }
     }
   }
   else if (!noCtl && !p.bot && ck.buf > 0 && (edge & K.A) && (p.act === 'bump' || p.act === 'spike')) p.bufA = ck.buf; // 조금 일찍 눌러도 받아 준다
   if (p.bufA > 0) p.bufA -= DT;
   if (p.act === 'charge') { // 파워게이지: 누르고 있으면 차고, 떼면 때린다
     let hold = inp & K.S;
+    if (hold && !ck.auto && !serving && !p.bot && !noTouch(S, p)) { // v1.94 S를 누르고 있는데 공이 손 닿는 범위를 지나가려 하면 마지막 순간에 자동으로 때림(너무 일찍 떼면 헛스윙)
+      const b = S.ball, sc = psc(p), ds = b.held || b.cap ? 9999 : Math.hypot(b.x - p.x - fdir(p) * 16 * sc, b.y - p.y + 80 * sc, (b.z - p.z) * ck.zk);
+      if (ds < 94 * sc * ck.reach && ds > p.sDist + 0.5 && !(b.lastTeam === p.team && b.teamCd > 0)) hold = 0;
+      p.sDist = ds;
+    }
     if (hold && ck.auto && !serving && !p.bot && !noTouch(S, p)) { // 쉬움: 공이 닿을 거리에 오면 알아서 때린다
       const b = S.ball, sc = psc(p), ds = b.held || b.cap ? 9999 : Math.hypot(b.x - p.x - fdir(p) * 16 * sc, b.y - p.y + 80 * sc, (b.z - p.z) * ck.zk);
       if (ds < 94 * sc * ck.reach && !(b.lastTeam === p.team && b.teamCd > 0) && (p.chg >= 0.5 || ds > p.sDist)) { hold = 0; p.chg = Math.min(p.chg, 0.5); } // 자동으로 나간 스파이크는 풀파워·콤보가 되지 않는다
       p.sDist = ds;
     }
-    if (hold) {
-      if (p.chg < 1) { p.chg = Math.min(1, p.chg + DT / (serving ? 0.7 : p.bot ? 0.42 : SPK_CHG)); if (p.chg >= 1) ev(S, 'full', p.x, p.y - 70, p.z, p.i); }
-      else { p.chgHold += DT; if (p.chgHold > (serving || p.bot ? 0.9 : SPK_HOLD)) { p.chg = 0.3; p.chgHold = 0; ev(S, 'txt', p.x, p.y - 150, p.z, '힘 빠짐…', 2); } }
-    } else if (serving) doServe(S, p, true, inp, p.chg);
+    if (hold && serving) { p.chgT = (p.chgT || 0) + DT; const u = (p.chgT / SRV_OSC) % 2; p.chg = u < 1 ? u : 2 - u; } // v1.94 서브 2단계: 세기 게이지가 오르내림
+    else if (hold) {
+      if (p.chg < 1) { p.chg = Math.min(1, p.chg + DT / (p.bot ? 0.42 : SPK_CHG)); if (p.chg >= 1) ev(S, 'full', p.x, p.y - 70, p.z, p.i); }
+      else if (p.bot) { p.chgHold += DT; if (p.chgHold > 0.9) { p.chg = 0.3; p.chgHold = 0; ev(S, 'txt', p.x, p.y - 150, p.z, '힘 빠짐…', 2); } }
+    } else if (serving) srvRelease(S, p, inp);
     else { p.pw = 0.76 + 0.52 * p.chg; p.act = 'spike'; p.actT = 0; p.hitDone = false; }
   } else if (p.act !== 'idle') {
     p.actT += DT;
@@ -1365,7 +1385,7 @@ function step(S) {
       for (const T of [0, 1]) { const ps = S.players.filter(q => q.team === T); if (ps.every(q => q.bot) && !(D && (D.used[T] || D.on >= 0)) && S.score[1 - T] - S.score[T] >= 2 && S.score[1 - T] >= S.target - 3 && Math.random() < 0.35) { askDouble(S, ps[0].i); break; } } }
     const p = S.players[S.server], f = fdir(p);
     if (b.held) { b.x = p.x + f * 30; b.y = p.y - 62; b.z = p.z; b.rot = 0; }
-    if (S.phaseT > 6.5 && b.held) doServe(S, p, false, 0, 0);
+    if (S.phaseT > SRV_LIMIT && b.held) { if (p.act === 'charge') srvRelease(S, p, 0); else doServe(S, p, false, 0, 0); } // v1.94 서브 시간 9초
   } else if (S.phase === 'rally' && S.boss && S.boss.hold) { bossHolding(S); stepItems(S);
   } else if (S.phase === 'rally') {
     if (b.sup === 'hot' && !b.cap) { b.fuse -= DT; if (b.fuse <= 0) explode(S); }
@@ -1769,5 +1789,5 @@ function bossParry(S, p) { // 10 카운터: 번쩍일 때 막으면 보스 코�
   B.cwSer = -1; B.groggy = Math.max(B.groggy, 2.5); bossSt(B, 'flinch'); ev(S, 'bossParry', b.x, b.y, b.z, p.i); ev(S, 'txt', p.x, p.y - 200, p.z, '카운터!!', 1, 1); S.stopT = 0.2;
 }
 
-const Core = { BOSSES, bossPads, CHAL, ROLES, roleOf, askDouble, predMove, rollDope, dopeLabel, chOf, DOPE_T, SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
+const Core = { spkStart, BOSSES, bossPads, CHAL, ROLES, roleOf, askDouble, predMove, rollDope, dopeLabel, chOf, DOPE_T, SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
 if (typeof module !== 'undefined') module.exports = Core;

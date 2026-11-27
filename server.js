@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'), Quiz = require('./quiz.js'); // v1.46 지구정복 자격시험(/quiz) // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.49'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.51'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
