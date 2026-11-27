@@ -47,6 +47,7 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
     if (usedBy(room, sl.id).includes(ch)) return '이 방에서 이미 쓴 캐릭터예요. 다른 캐릭터를 골라 주세요';
     sl.ch = ch; sl.rnd = false; return null;
   }
+  if (op.t === 'pctrl') { if (si < 0 || !RC.CTRLS[op.v]) return 'bad'; (room.pc = room.pc || {})[id] = op.v; return null; } // v1.59 조작 난이도는 사람마다 따로(room.pc: 사람 id → 조작 난이도)
   if (op.t === 'role') { if (si < 0 || !RC.ROLES[op.r]) return 'bad'; room.slots[si].role = op.r; return null; } // v0.95 역할
   if (op.t === 'dope') { // v0.64 도핑: 자기 자리에서 경기 전 한 번만
     if (si < 0) return 'bad'; const sl = room.slots[si]; if (sl.doped) return '도핑은 경기 전에 한 번만 할 수 있어요'; sl.doped = true; sl.dope = RC.rollDope(); return null;
@@ -86,9 +87,10 @@ function roomApply(room, id, op, owner) { // 로비 조작 한 건. 문제가 �
   }
   return 'bad';
 }
+function pctrlOf(room, s) { return s && s.kind === 'human' ? (room.pc && RC.CTRLS[room.pc[s.id]] ? room.pc[s.id] : room.ctrl || 'normal') : ''; } // 그 자리 사람의 조작 난이도(PC는 '')
 function pickStage(room) { return room.stage === 'random' ? RC.STAGES[Math.floor(Math.random() * RC.STAGES.length)].id : room.stage; }
-function gameCfg(room, stage) { rollBots(room); markUsed(room); return { boss: room.boss || '', chal: room.chal || '', stage, target: room.target, diff: room.diff, /* v1.85 랠리 도전도 고른 난이도의 PC */ ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ role: s.role || 'all', ch: s.ch, name: s.name, bot: s.kind === 'bot', dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
-function metaOf(room, stage) { return { boss: room.boss || '', n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), roles: room.slots.map(s => room.n === 1 ? 'all' : s.role || 'all'), bots: room.slots.map(s => s.kind === 'bot'), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
+function gameCfg(room, stage) { rollBots(room); markUsed(room); return { boss: room.boss || '', chal: room.chal || '', stage, target: room.target, diff: room.diff, /* v1.85 랠리 도전도 고른 난이도의 PC */ ctrl: room.ctrl || 'normal', items: room.items, slots: room.slots.map(s => ({ role: s.role || 'all', ch: s.ch, name: s.name, bot: s.kind === 'bot', ctrl: pctrlOf(room, s), dope: s.kind === 'human' && s.doped ? s.dope || 0 : 0, doped: s.kind === 'human' && !!s.doped })) }; }
+function metaOf(room, stage) { return { boss: room.boss || '', n: room.n, stage, target: room.target, diff: room.diff, ctrl: room.ctrl || 'normal', names: room.slots.map(s => s.name), chs: room.slots.map(s => s.ch), roles: room.slots.map(s => room.n === 1 ? 'all' : s.role || 'all'), bots: room.slots.map(s => s.kind === 'bot'), ctrls: room.slots.map(s => pctrlOf(room, s)), dopes: room.slots.map(s => s.kind === 'human' && s.doped ? s.dope || 0 : 0) }; }
 function newCode() { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
 /* 경기 상태 → 전송용 스냅샷 */
@@ -156,5 +158,5 @@ function dec(buf) {
   return r();
 }
 
-const RoomLib = { BOSS_STS, BOSS_EVS, packBoss, usedBy, markUsed, afterGame, enc, dec, teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
+const RoomLib = { BOSS_STS, BOSS_EVS, packBoss, usedBy, markUsed, afterGame, enc, dec, teamOf, fixedCh, fixTeams, rollBots, ACTS, STK, randCh, mkRoom, layoutRoom, humansOf, pctrlOf, RC_CTRLS: v => typeof v === 'string' && !!RC.CTRLS[v], sideCount, joinSlot, roomApply, pickStage, gameCfg, metaOf, newCode, pack };
 if (typeof module !== 'undefined' && module.exports && RC !== (typeof Core === 'undefined' ? null : Core)) module.exports = RoomLib;

@@ -6,7 +6,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'), Quiz = require('./quiz.js'); // v1.46 지구정복 자격시험(/quiz) // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.57'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.61'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -127,6 +127,7 @@ function onHello(ws, m) {
     if (idx < 0) { if (specs.length >= MAX_SPECS) return send(ws, { t: 'full' }); specs.push({ id: ws.id, name }); bc(room, { t: 'toast', m: name + ' 님이 관전하러 왔어요' }); }
     else { room.cfg.slots[idx] = { kind: 'human', id: ws.id, name, ch: R.randCh(R.fixedCh(room.cfg, R.teamOf(room.cfg, idx), idx)) }; bc(room, { t: 'toast', m: name + ' 님이 들어왔어요' }); }
   }
+  if (R.RC_CTRLS(m.ctrl)) (room.cfg.pc = room.cfg.pc || {})[ws.id] = m.ctrl; /* v1.59 들어올 때 자기 조작 난이도를 같이 보냄(휴대폰·태블릿 기본값 쉬움) */
   ws.room = room; ws.name = name; room.clients.set(ws.id, ws);
   ws.bin = m.bin === 2 ? 2 : m.bin === 1 ? 1 : 0; // 0 글자, 1 이진 묶음, 2 이진 묶음 + 항목 이름 생략
   ws.hz = m.hz === 60 ? 60 : 30; // 화면 상태를 받는 빈도. 새 화면은 초당 60번, 예전 화면은 30번
@@ -136,7 +137,7 @@ function onHello(ws, m) {
 }
 function onLeave(ws) {
   const room = ws.room; if (!room) return; ws.room = null;
-  room.clients.delete(ws.id);
+  room.clients.delete(ws.id); if (room.cfg.pc) delete room.cfg.pc[ws.id];
   if (room.cfg.specs) room.cfg.specs = room.cfg.specs.filter(s => s.id !== ws.id);
   const i = slotOf(room, ws.id);
   if (i >= 0) {
@@ -156,7 +157,7 @@ function onMsg(ws, m) {
   const owner = room.cfg.owner === ws.id;
   if (m.t === 'ping') { send(ws, { t: 'pong', c: +m.c || 0, g: Math.round(gapMax) }); return; } // g: 최근 2초 동안 서버 계산이 가장 길게 밀린 시간(ms)
   if (m.t === 'in') { ws.inp = (m.k | 0) & 255; ws.latch |= ws.inp; if (m.q != null) { ws.seq = (m.q | 0) & 255; ws.seqN = 0; } if (m.l != null) ws.lag = Math.max(0, Math.min(12, m.l | 0)); } // l(v0.61): 그 사람 화면의 공이 몇 틱 전 것인지 // q(v0.60): 입력 번호
-  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set' || m.t === 'dope' || m.t === 'role') {
+  else if (m.t === 'ch' || m.t === 'move' || m.t === 'set' || m.t === 'dope' || m.t === 'role' || m.t === 'pctrl') {
     if (room.S) return;
     const err = R.roomApply(room.cfg, ws.id, m, owner);
     if (err) { if (err !== 'bad') send(ws, { t: 'toast', m: err }); return; }
@@ -173,7 +174,7 @@ function onMsg(ws, m) {
     if (room.S && room.swapUsed && room.swapUsed.has(ws.id)) return send(ws, { t: 'toast', m: '경기 중 참여는 한 번만 할 수 있어요' });
     const idx = pick(); if (idx < 0) return send(ws, { t: 'toast', m: team >= 0 ? '그 팀에는 PC 자리가 없어요' : '빈자리가 없어요' });
     cfg.specs = specs.filter(s => s.id !== ws.id);
-    if (room.S) { room.swapUsed.add(ws.id); const p = room.S.players[idx]; cfg.slots[idx] = { kind: 'human', id: ws.id, name: ws.name, ch: p.ch }; p.bot = false; p.name = ws.name; p.inp = 0; room.meta = R.metaOf(cfg, room.S.stage); bc(room, { t: 'meta', meta: room.meta }); send(ws, { t: 'seat', you: idx }); bc(room, { t: 'toast', m: ws.name + ' 님이 PC 대신 들어왔어요' }); }
+    if (room.S) { room.swapUsed.add(ws.id); const p = room.S.players[idx]; cfg.slots[idx] = { kind: 'human', id: ws.id, name: ws.name, ch: p.ch }; p.bot = false; p.ctrl = R.pctrlOf(cfg, cfg.slots[idx]) || undefined; /* v1.59 */ p.name = ws.name; p.inp = 0; room.meta = R.metaOf(cfg, room.S.stage); bc(room, { t: 'meta', meta: room.meta }); send(ws, { t: 'seat', you: idx }); bc(room, { t: 'toast', m: ws.name + ' 님이 PC 대신 들어왔어요' }); }
     else cfg.slots[idx] = { kind: 'human', id: ws.id, name: ws.name, ch: R.randCh(R.fixedCh(cfg, R.teamOf(cfg, idx), idx)) };
     bc(room, pub(room));
   }

@@ -102,7 +102,7 @@ const SPK_CHG = 0.72, SPK_HOLD = 0.5, SPK_POW = 1.0; // v1.16 강스파이크 �
 const RCV_K = 0.9; // v1.16 사람의 리시브(상대 공 받기) 손 닿는 거리 10% 줄임(모든 난이도)
 const AIR_K = 0.8, AIR_R = 250, AIR_ZK = 0.55, AIR_LEAD = 0.13, /* v1.39 스파이크 점프 때 공 쪽으로 더 잘 따라감(전: 0.62·215, 앞뒤 0.3, 앞서 보기 0.1초) */ DEP_K = 0.29, DEP_R = 150, DEP_AIR = 0.34, DIV_K = 0.5; // v1.31 리시브·스파이크 자동 이동 살짝 더(전: 0.55·200, 깊이 0.25·140·공중 0.3) // v1.22 자동 따라가기 더 약하게(공중 앞뒤 끌기는 ak의 30%; v1.21: 공중 0.8·260, 깊이 0.5·190·공중 0.65 / v1.20: 1.0·320, 0.62·230·0.8, 다이빙은 공 쪽으로 100%)
 const CTRLS = { // 조작 난이도
-  easy: { name: '쉬움', desc: '깊이 자동 맞춤 강하게 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.12, auto: true, buf: 0.18 } /* v1.16 perf 0.15→0.12, buf 0.22→0.18 */,
+  easy: { name: '쉬움', desc: '공 근처에서 자리 자동 맞춤 · 판정 넉넉 · 꾹 누르고 있으면 알아서 스파이크 · 버튼 안내 · 대신 속도·점프·공 세기 같은 성능이 5% 낮음', zk: 0.55, reach: 1.14, assist: 1.3, perf: 0.12, auto: true, buf: 0.18, mag: 0.5 } /* v2.05 mag: 공이 떨어질 자리 근처에서 좌우 키를 놓으면 좌우도 저절로 맞춰 줌(모바일 조작 보조) */ /* v1.16 perf 0.15→0.12, buf 0.22→0.18 */,
   normal: { name: '보통', desc: '깊이 자동 맞춤 · 버튼 안내. 스파이크 타이밍은 직접 맞춘다', zk: 0.63, reach: 1.05, assist: 1.12, perf: 0.08, auto: false, buf: 0.14 } /* v1.16 perf 0.1→0.08, buf 0.18→0.14 */, // v0.23: 조금 쉽게(전: zk 0.68, reach 1, assist 1, perf 0.075, buf 0.16)
   pro: { name: '수동', desc: '도움 없음. 앞뒤 위치와 타이밍을 전부 직접 맞춘다(버튼 안내도 꺼짐)', zk: 1, reach: 1, assist: 0, perf: 0.06, auto: false, buf: 0 } /* v1.16 perf 0.075→0.06 */,
 };
@@ -113,7 +113,13 @@ function dopeLabel(d) { return d ? (d > 0 ? '+' : '') + Math.round(d * 100) + '%
 const DOPED = {};
 function chOf(p) { const c = CHARS[p.ch], d = p.dope; if (!d) return c; const k = p.ch + '|' + d; if (!DOPED[k]) { const o = Object.assign({}, c), f = v => Math.max(0.5, Math.min(10, v + d)); /* 0.5~10칸 */ o.spd = f(c.spd); o.jmp = f(c.jmp); o.pow = f(c.pow); o.tec = f(c.tec); o.gut = f(c.gut); DOPED[k] = o; } return DOPED[k]; } // 그 선수의 실제 능력치(도핑 반영)
 function supHow(ch) { return CHARS[ch].type === 'instant' ? 'D를 누르면 바로 발동' : '점프해서 공 가까이에서 D'; }
-function ctl(S, p) { return CTRLS[S.ctrl] || CTRLS.normal; } // 판정(거리·깊이)은 PC와 사람이 같다. 자동 맞춤·자동 스파이크 같은 도움만 사람 전용
+function magX(S, p, inp) { const ck = ctl(S, p), b = S.ball, L = S.pred && S.pred.land; // v2.05 쉬움: 떨어질 자리에서 230 안쪽이고 좌우 키를 안 누르면 그 자리로 절반 속도로 끌어 줌
+  if (!ck.mag || p.bot || !p.gnd || !L || b.held || b.cap || S.phase !== 'rally' || sideOf(L.x) !== p.team || (inp & (K.L | K.R)) || p.act === 'dive' || busy(p) || noTouch(S, p)) return null;
+  const dx = L.x - fdir(p) * 8 - p.x; return Math.abs(dx) > 230 || Math.abs(dx) < 6 ? null : clamp(dx / 30, -1, 1) * ck.mag; }
+function ctl(S, p) { return CTRLS[(p && p.ctrl) || S.ctrl] || CTRLS.normal; } /* v2.06 조작 난이도는 사람마다 따로(p.ctrl). PC와 예전 방식은 방 설정(S.ctrl) */
+function humanCtrl(S) { const h = S.players.find(p => !p.bot && p.ctrl); return (h && h.ctrl) || S.ctrl || 'normal'; } // 도전과제(혼자) 점수 배율·표시에 쓰는 내 조작 난이도
+const EASY_STAT = 0.95; /* v2.07 조작 '쉬움'을 고른 사람은 실제 성능이 5% 낮다: 달리기 속도·점프 높이·공 세기 ×0.95, 조준 오차·체력 소모·맞았을 때 피해 ÷0.95 */
+function ezK(p) { return p && p.ctrl === 'easy' ? EASY_STAT : 1; } // 판정(거리·깊이)은 PC와 사람이 같다. 자동 맞춤·자동 스파이크 같은 도움만 사람 전용
 const HOMES = { 1: [[330, 0.5]], 2: [[170, 0.34], [440, 0.66]], 3: [[150, 0.5], [430, 0.24], [430, 0.76]] };
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -126,14 +132,14 @@ function psc(p) { const s = p.st || {}; return (p.big > 0 ? 1.4 : 1) * (p.mini >
 function busy(p) { const s = p.st; return s.down > 0 || s.stun > 0 || s.hop > 0 || s.sleep > 0 || s.frozen > 0; }
 function cool(p) { return chOf(p).id === 'iseu' ? 0.4 : 1; }
 function tq(c) { return 3 + (c.tec - 3) * 0.75; } // v0.50 기술 1칸 효과(승률 영향이 너무 커서 0.75배)
-function gutMul(p) { return (1 + (3 - chOf(p).gut) * 0.17) * cool(p) / balK(p); } // v0.37: 능력치 차이를 더 크게(맷집 1 → 1.3배, 5 → 0.7배)
+function gutMul(p) { return (1 + (3 - chOf(p).gut) * 0.17) * cool(p) / balK(p) / ezK(p); } // v0.37: 능력치 차이를 더 크게(맷집 1 → 1.3배, 5 → 0.7배)
 function balK(p) { return p.bal || 1; } // v1.53 숨은 밸런스: 점수 1점 차마다 앞선 팀 -1.5%, 뒤진 팀 +1.5%(보스전 제외, 화면에 안 보임)
 function balUpd(S) { for (const q of S.players) { const d = S.boss ? 0 : S.score[q.team] - S.score[1 - q.team]; q.bal = clamp(1 - 0.015 * d, 0.6, 1.4); } }
 function fat(p) { return (0.78 + 0.22 * clamp(p.hp, 0, 100) / 100) * balK(p); } // 체력이 떨어질수록 능력치가 내려간다(체력 0이면 78%)
-function tire(p, amt, mv) { if (p.ko || p.hp <= 10) return; p.hp = Math.max(10, p.hp - amt * (mv ? 1 : STA.act) * (0.97 + (3 - chOf(p).gut) * 0.09) / balK(p)); } // 움직이고 치는 데 드는 체력. 근성이 높으면 덜 지친다. 이것만으로는 10 아래로 안 내려간다
+function tire(p, amt, mv) { if (p.ko || p.hp <= 10) return; p.hp = Math.max(10, p.hp - amt * (mv ? 1 : STA.act) * (0.97 + (3 - chOf(p).gut) * 0.09) / balK(p) / ezK(p)); } // 움직이고 치는 데 드는 체력. 근성이 높으면 덜 지친다. 이것만으로는 10 아래로 안 내려간다
 function pSpeed(S, p) {
   const c = chOf(p), s = p.st;
-  return (385 + (c.spd - 3) * 14) * MOVE_K * roleK(p, 'spd') * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (s.moon > 0 ? 1.3 : 1) * (s.giant > 0 ? 1.28 : 1) /* v1.15 거대 치와와는 빠르다(v1.31 1.2→1.28) */ * (s.wet2 > 0 ? 0.7 : 1) * (p.ck || 1) * (S.env.slip ? 1 + 0.2 * (p.mom || 0) : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * fat(p) * (s.half > 0 ? 0.5 : 1) * (p.tis > 0 ? 0.7 : 1) * (s.boost > 0 ? 1.25 : 1) * (s.giant > 0 ? 0.92 : 1)
+  return (385 + (c.spd - 3) * 14) * ezK(p) * MOVE_K * roleK(p, 'spd') * (p.fast > 0 ? 1.4 : 1) * (s.sad > 0 ? 0.62 : 1) * (s.wrap > 0 ? 0.3 : 1) * (s.moon > 0 ? 1.3 : 1) * (s.giant > 0 ? 1.28 : 1) /* v1.15 거대 치와와는 빠르다(v1.31 1.2→1.28) */ * (s.wet2 > 0 ? 0.7 : 1) * (p.ck || 1) * (S.env.slip ? 1 + 0.2 * (p.mom || 0) : 1) * (p.mini > 0 ? 1.08 : 1) * (p.big > 0 ? 0.92 : 1) * fat(p) * (s.half > 0 ? 0.5 : 1) * (p.tis > 0 ? 0.7 : 1) * (s.boost > 0 ? 1.25 : 1) * (s.giant > 0 ? 0.92 : 1)
     * (c.id === 'mungbek' && S.ball && !S.ball.held && S.ball.lastTeam >= 0 && S.ball.lastTeam !== p.team ? 1.12 : 1);
 }
 function pGrav(S, p, raw) { return (raw || !p.jf ? 1 : 1 / (p.jf * p.jf)) * GP * (p.act === 'block' && S.env.g < 1 ? 1 : S.env.g) * (chOf(p).id === 'dalgareum' ? 0.76 : 1) * (S.env.jelly ? 0.86 : 1); } // 과자 나라: 젤리 바닥이라 높이 뜬다
@@ -145,8 +151,8 @@ const ROLES = { // v0.98 역할: 비슷한 실력이면 역할을 잘 해내는 
 const RK = { libero: { reach: 1.2, rcv: 1.4, dive: 1.25, tough: 0.55, spk: 0.8, jmp: 0.88, blk: 0.8 }, setter: { toss: 1.5, setb: 1.2, spd: 1.08, spk: 0.85, rcv: 0.9 }, spiker: { spk: 1.18, jmp: 1.1, out: 0.75, blk: 1.15, reach: 0.85, rcv: 0.8 } }; // v1.36 변동폭 절반(전: 리베로 reach 1.4 rcv 1.8 dive 1.5 tough 0.8 spk 0.6 jmp 0.75 blk 0.6 / 세터 toss 2 setb 1.4 spd 1.15 spk 0.7 rcv 0.8 / 스파이커 spk 1.35 jmp 1.2 out 0.5 blk 1.3 reach 0.7 rcv 0.6)
 function roleK(p, k) { const r = RK[roleOf(p)]; return r && r[k] != null ? r[k] : 1; }
 function roleOf(p) { return p && p.role && ROLES[p.role] ? p.role : 'all'; }
-function powV(c) { return 1155 + (c.pow - 3) * 200; } // 파워 → 스파이크·강서브 공 속도(파워 3 = 예전과 같음)
-function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * balK(p) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1) * (p.st && p.st.giant > 0 ? 1.15 : 1); } /* v1.31 1.1→1.15 */ // v1.15 거대 치와와는 더 높이
+function powV(c, p) { return (1155 + (c.pow - 3) * 200) * ezK(p); } // 파워 → 스파이크·강서브 공 속도(파워 3 = 예전과 같음)
+function jumpV(p) { return (914 + (chOf(p).jmp - 3) * 80) * Math.sqrt(ezK(p)) /* 높이 -5% */ * balK(p) * roleK(p, 'jmp') * (1 + ((p.ck || 1) - 1) * 0.5) * (0.9 + 0.1 * clamp(p.hp, 0, 100) / 100) * (p.st && p.st.half > 0 ? 0.75 : 1) * (p.st && p.st.giant > 0 ? 1.15 : 1); } /* v1.31 1.1→1.15 */ // v1.15 거대 치와와는 더 높이
 function jumpH(S, p) { const v = jumpV(p); return v * v / (2 * pGrav(S, p, 1)); }
 function hangK(p) { return clamp(1.08 + (chOf(p).jmp - 2.5) * 0.12, 1, 1.5); } // v1.95 점프 체공시간 배율(높이는 같고 더 오래 떠 있음): 점프 2.5 = +8% · 3.5 = +20% · 4.5 = +32%
 function airMoveK(p) { return clamp(1 + (chOf(p).jmp - 3.5) * 0.15, 0.8, 1.35); } // v1.95 공중 이동 거리 차이
@@ -178,7 +184,7 @@ function newGame(cfg) {
   for (let i = 0; i < (cfg.boss ? n : n * 2); i++) S.players.push(mkPlayer(i, cfg.slots[i], n));
   if (cfg.boss) { S.target = 20; S.swapN = 0; S.serveTeam = 0; bossInit(S, cfg.boss); }
   if (cfg.chal && CHAL[cfg.chal]) { S.chal = { k: cfg.chal, n: 0, cur: 0, best: 0, sc: 0, tgt: null, side: -1, done: 0 }; S.itemsOn = false; S.target = 99; } // v0.95 혼자 하기 도전 모드
-  for (const p of S.players) { p.role = n === 1 ? 'all' : (ROLES[cfg.slots[p.i].role] ? cfg.slots[p.i].role : 'all'); p.dope = cfg.slots[p.i].dope || 0; if (cfg.slots[p.i].doped) S.ev.push([S.evId++, 'txt', Math.round(p.x), Math.round(p.y - 170), Math.round(p.z), '도핑 ' + dopeLabel(p.dope) + (p.dope ? '!' : ''), p.dope > 0 ? 1 : p.dope < 0 ? 2 : 0]); }
+  for (const p of S.players) { p.role = n === 1 ? 'all' : (ROLES[cfg.slots[p.i].role] ? cfg.slots[p.i].role : 'all'); p.dope = cfg.slots[p.i].dope || 0; p.ctrl = !p.bot && CTRLS[cfg.slots[p.i].ctrl] ? cfg.slots[p.i].ctrl : undefined; /* v2.06 */ if (cfg.slots[p.i].doped) S.ev.push([S.evId++, 'txt', Math.round(p.x), Math.round(p.y - 170), Math.round(p.z), '도핑 ' + dopeLabel(p.dope) + (p.dope ? '!' : ''), p.dope > 0 ? 1 : p.dope < 0 ? 2 : 0]); }
   for (const p of S.players) { p.supN = 0; p.supCap = supCapOf(S.target); p.gk = gaugeKOf(S.target); }
   startServe(S);
   return S;
@@ -318,7 +324,7 @@ function supLocked(p) { return p.supBan > 0 || (p.supN | 0) >= (p.supCap || 99);
 function addGauge(p, v) { p.gauge = supLocked(p) ? 0 : clamp(p.gauge + v * GAUGE_K * (p.gk || 1), 0, 100); }
 function hurt(S, p, d) {
   if (p.ko) return;
-  p.hp -= d * (1 + (3 - chOf(p).gut) * 0.14) / balK(p);
+  p.hp -= d * (1 + (3 - chOf(p).gut) * 0.14) / balK(p) / ezK(p);
   if (p.hp <= 0) {
     p.hp = 0; p.ko = true; p.st.down = Math.max(p.st.down, 3.3 * cool(p)); p.act = 'idle'; p.chg = 0; p.stats.fall++;
     p.vy = -1950 * Math.sqrt(S.env.g); p.gnd = false; p.vx = clamp(p.vx * 0.4, -150, 150); p.sky = true; p.bounce = 1;
@@ -486,17 +492,17 @@ function shotPreview(S, p, inp) { // 내 서브·스파이크가 날아갈 길(�
   const c = chOf(p), f = fdir(p), d = aimKeys(p, inp), T = p.team, b0 = S.ball, q = { x: b0.x, y: b0.y, z: b0.z, vx: 0, vy: 0, vz: 0, float: 0, out: false };
   if (S.phase === 'serve' && S.server === p.i) {
     const free = !p.bot && p.aimOn && p.aimSx != null, tx = oppD(T, free ? p.aimSx : d.fwd ? 520 : d.back ? 190 : 350), tz = free ? p.aimSz : laneZ(p, d, p.z); q.z = p.z; q.srv = true;
-    if (p.act === 'charge') { q.x = p.x + f * 22; q.y = p.y - 215; drive(S, q, tx, tz, GY - BR, powV(c) * fat(p) * (0.58 + 0.36 * p.chg)); }
+    if (p.act === 'charge') { q.x = p.x + f * 22; q.y = p.y - 215; drive(S, q, tx, tz, GY - BR, powV(c, p) * fat(p) * (0.58 + 0.36 * p.chg)); }
     else { q.x = p.x + f * 26; q.y = p.y - 78; lobOver(S, q, T, free ? p.aimSx : d.fwd ? 520 : d.back ? 190 : 350, tz, 0, GY - 480); }
   } else { // 스파이크: 공이 내 손에 가장 가까워질 곳에서 때린다고 보고, 거기서 조준한 곳까지
     const r = { x: b0.x, y: b0.y, z: b0.z, vx: b0.vx, vy: b0.vy, vz: b0.vz, float: b0.float || 0, out: false }, hx = p.x + f * 16, hy = p.y - 100; let best = 1e9;
     for (let i = 0; i < 60; i++) { const dd = Math.hypot(r.x - hx, r.y - hy); if (dd < best) { best = dd; q.x = r.x; q.y = r.y; q.z = r.z; } ballStep(S, r, DT, false); if (r.y + BR >= GY) break; }
-    const a = spikeAim(p, inp); drive(S, q, a.x, a.z, GY - BR, powV(c) * fat(p) * (0.76 + 0.52 * (p.chg || 0)) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S))); }
+    const a = spikeAim(p, inp); drive(S, q, a.x, a.z, GY - BR, powV(c, p) * fat(p) * (0.76 + 0.52 * (p.chg || 0)) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S))); }
   const pts = []; for (let i = 0; i < 300; i++) { ballStep(S, q, DT, false); if (i % 3 === 0) pts.push([q.x, q.y, q.z]); if (q.y + BR >= GY) { pts.push([q.x, GY - BR, q.z]); break; } }
   return pts;
 }
 function spikeTarget(S, p, d, acc) { // acc: 오차 배율(연결 공격이면 작아진다)
-  acc = acc || 1; const T = p.team, c = chOf(p), e = rnd(-1, 1) * (16 + (6 - tq(c)) * 16) * acc * (2 - balK(p)), ez = rnd(-1, 1) * (10 + (6 - tq(c)) * 11) * acc * (2 - balK(p));
+  acc = acc || 1; const T = p.team, c = chOf(p), e = rnd(-1, 1) * (16 + (6 - tq(c)) * 16) * acc * (2 - balK(p)) / ezK(p), ez = rnd(-1, 1) * (10 + (6 - tq(c)) * 11) * acc * (2 - balK(p)) / ezK(p);
   if (!p.bot && p.spkOn && p.spkSx != null) return { x: clamp(oppD(T, p.spkSx) + e * 0.7, 50, CW - 50), z: cz(p.spkSz + ez * 0.7) }; // v1.94 사람이 정한 과녁(오차 조금 작게)
   const dist = d.fwd ? 525 : d.back ? 185 : 350;
   return { x: clamp(oppD(T, dist) + e, 50, CW - 50), z: cz(laneZ(p, d, p.z) + ez) };
@@ -520,7 +526,7 @@ function hitSpike(S, p) {
   const tg = spikeTarget(S, p, d, acc), full = p.pw >= 1.26; b.full = !p.gnd && full;
   const duo = air && !S.tut && S.players.find(q => q !== p && q.team === p.team && !q.gnd && !q.ko && q.jumpAt != null && p.jumpAt != null && Math.abs(q.jumpAt - p.jumpAt) <= 0.3 && Math.hypot(q.x - p.x, q.z - p.z) < 260 * XS); // v0.95 합동 스파이크: 같은 팀 둘이 0.3초 안에 같이 뛰면 힘↑(게이지와 무관)
   if (duo) { mul *= 1.15; ev(S, 'duo', p.x, p.y, p.z, p.i, duo.i); ev(S, 'txt', (p.x + duo.x) / 2, p.y - 250, (p.z + duo.z) / 2, '합동 스파이크!!', 1, 1); }
-  const sp = powV(c) * fat(p) * roleK(p, 'spk') * (setB >= 0 ? roleK(S.players[setB], 'setb') : 1) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul * (p.st.giant > 0 ? 1.85 : 1) /* v1.15 1.4→1.6, v1.31 →1.85 */ * (p.st.half > 0 ? 0.45 : 1) * (c.id === 'banban' && p.bw ? 1.1 : 1) * (chance ? 1.5 : 1) * (p.ck || 1);
+  const sp = powV(c, p) * fat(p) * roleK(p, 'spk') * (setB >= 0 ? roleK(S.players[setB], 'setb') : 1) * p.pw * (p.gnd ? 0.62 : 1) * (p.big > 0 ? 1.1 : 1) * (p.mini > 0 ? 0.85 : 1) * (1 + heat(S)) * mul * (p.st.giant > 0 ? 1.85 : 1) /* v1.15 1.4→1.6, v1.31 →1.85 */ * (p.st.half > 0 ? 0.45 : 1) * (c.id === 'banban' && p.bw ? 1.1 : 1) * (chance ? 1.5 : 1) * (p.ck || 1);
   b.home = 0;
   drive(S, b, tg.x, tg.z, GY - BR, sp); b.power = !p.gnd && p.pw > (p.bot ? 0.9 : SPK_POW); // 강스파이크 어렵게는 사람만(PC 공격은 그대로)
   if (!b.sup && !(p.st.giant > 0) && !S.tut) { // v0.41 스파이크 아웃: 힘·기술·조준 칸(끝·옆줄)·타이밍(손에서 먼 곳)·랠리 과열로 늘고, 연결 공격이면 줄어든다
@@ -661,7 +667,7 @@ function hitSuper(S, p) {
   const d = dirKeys(p, p.inp);
   if (!touch(S, p, 'spike')) return;
   cutIn(S, p);
-  const tg = spikeTarget(S, p, d), sp = powV(c) * 1.2;
+  const tg = spikeTarget(S, p, d), sp = powV(c, p) * 1.2;
   if (c.sup === 'mom') { // 살짝 넘기면 상대 코트 뒤에서 엄마 돼지가 솟아올라 대신 때린다
     const mz = clamp(tg.z, 60, ZD - 60); b.sup = null; b.power = false; b.float = 0; b.home = 0;
     lob(S, b, oppD(T, 560), mz, GY - 300, GY - 520);
@@ -819,13 +825,13 @@ function doServe(S, p, power, inp, chg, flt) {
   if (power) {
     b.x = p.x + f * 22; b.y = p.y - 215; p.vy = -560; p.gnd = false;
     const ultra = chg >= 0.95 && !(p.st.half > 0); b.ultra = ultra; // v0.51 게이지 95% 이상 = 초강서브(파란 불꽃)
-    drive(S, b, oppD(T, dist) + e, tz, GY - BR, powV(c) * fat(p) * (0.58 + 0.36 * chg) * (p.st.half > 0 ? 0.6 : 1) * (ultra ? 1.12 : 1)); b.power = chg > 0.5 && !(p.st.half > 0);
+    drive(S, b, oppD(T, dist) + e, tz, GY - BR, powV(c, p) * fat(p) * (0.58 + 0.36 * chg) * (p.st.half > 0 ? 0.6 : 1) * (ultra ? 1.12 : 1)); b.power = chg > 0.5 && !(p.st.half > 0);
     if (ultra) ev(S, 'txt', p.x, p.y - 200, p.z, '초강서브!!', 1, 1);
-    if (chg >= 0.95 && Math.random() < SERVE_OUT_P) { b.out = true; b.outK = 'serve'; drive(S, b, oppD(T, 640 + rnd(35, 80)), tz, GY - BR, powV(c) * fat(p) * (0.58 + 0.36 * chg) * (ultra ? 1.12 : 1)); } // 너무 세게 때려 끝선 밖으로
+    if (chg >= 0.95 && Math.random() < SERVE_OUT_P) { b.out = true; b.outK = 'serve'; drive(S, b, oppD(T, 640 + rnd(35, 80)), tz, GY - BR, powV(c, p) * fat(p) * (0.58 + 0.36 * chg) * (ultra ? 1.12 : 1)); } // 너무 세게 때려 끝선 밖으로
     p.act = 'spike'; p.actT = 0.05; p.hitDone = true; ev(S, 'spike', b.x, b.y, b.z, chg >= 0.97 ? 1 : 0, p.i); S.stopT = ultra ? 0.08 : 0.04; ev(S, 'hit', b.x, b.y, b.z, chg >= 0.97 ? 3 : 1, p.i);
-  } else if (flt) { b.x = p.x + f * 26; b.y = p.y - 150; drive(S, b, oppD(T, dist) + e, tz, GY - BR, powV(c) * fat(p) * 0.6); b.flt = 1.6; b.fph = rnd(0, 6.28); p.act = 'spike'; p.actT = 0.05; p.hitDone = true; ev(S, 'bump', b.x, b.y, b.z, 1); ev(S, 'txt', p.x, p.y - 170, p.z, '플로터!', 0); } // 흔들리며 날아가는 서브
+  } else if (flt) { b.x = p.x + f * 26; b.y = p.y - 150; drive(S, b, oppD(T, dist) + e, tz, GY - BR, powV(c, p) * fat(p) * 0.6); b.flt = 1.6; b.fph = rnd(0, 6.28); p.act = 'spike'; p.actT = 0.05; p.hitDone = true; ev(S, 'bump', b.x, b.y, b.z, 1); ev(S, 'txt', p.x, p.y - 170, p.z, '플로터!', 0); } // 흔들리며 날아가는 서브
   else { b.x = p.x + f * 26; b.y = p.y - 78; lobOver(S, b, T, dist, tz, e / XS, GY - 480); /* v1.36 네트 가까이 노려도 넘어가게 필요하면 더 높이 */ p.act = 'bump'; p.actT = 0.05; p.hitDone = true; ev(S, 'bump', b.x, b.y, b.z, 0); }
-  p.chg = 0;
+  p.chg = 0; if (S.chal) S.chal.sp = power ? clamp(chg, 0, 1) : -1; // v2.05 도전 서브 점수용: 점프 서브 게이지(언더·플로터는 -1)
   S.phase = 'rally'; S.phaseT = 0; ev(S, 'serve', b.x, b.y, b.z);
 }
 
@@ -861,6 +867,7 @@ function predMove(S, p, inp, edge) {
     if (!b.held && !b.cap) { if (!p.gnd && Math.abs(b.x - p.x) < 190) tz = b.z; else if (p.gnd && L && sideOf(L.x) === p.team && Math.abs(L.x - p.x) < DEP_R) tz = L.z; }
     if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? DEP_K : DEP_AIR) * ck.assist);
   }
+  { const m2 = !serving ? magX(S, p, inp) : null; if (m2 !== null) mx = m2; } // v2.05 stepPlayer 와 같음
   if (p.act === 'dive') {
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 260 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
     else { const fr = (ice ? 600 : S.env.slip ? 1300 : S.env.wet ? 1900 : 2600) * DT, v = Math.hypot(p.vx, p.vz); if (v > fr) { p.vx *= (v - fr) / v; p.vz *= (v - fr) / v; } else p.vx = p.vz = 0; }
@@ -971,6 +978,7 @@ function stepPlayer(S, p) {
     }
     if (tz !== null && Math.abs(tz - p.z) > 5) mz = clamp((tz - p.z) / 36, -1, 1) * Math.min(1, (p.gnd ? DEP_K : DEP_AIR) * ck.assist);
   }
+  { const m2 = !reset && !serving && s.puppet <= 0 && s.wrap <= 0 ? magX(S, p, inp) : null; if (m2 !== null) mx = m2; } // v2.05 쉬움: 좌우 자리 자동 맞춤
   if (p.act === 'dive') { // 정해진 거리(diveLen)만큼만 미끄러진다
     if (p.actT < 0.26) { const v = 600 + (c.id === 'sene' ? 260 : 0); p.vx = p.diveX * v; p.vz = p.diveZ * v; }
     else { const fr = (ice ? 600 : S.env.slip ? 1300 : S.env.wet ? 1900 : 2600) * DT, v = Math.hypot(p.vx, p.vz); if (v > fr) { p.vx *= (v - fr) / v; p.vz *= (v - fr) / v; } else p.vx = p.vz = 0; }
@@ -992,7 +1000,7 @@ function stepPlayer(S, p) {
     if (!p.aimOn) { p.aimOn = true; p.aimX = inp & F ? 1 : inp & Bk ? -1 : 0; p.aimZ = inp & K.U ? -1 : inp & K.D ? 1 : 0; p.aimSx = 350; p.aimSz = p.aimSz0 = p.z; }
     else if (!serving && !((inp & K.S) || p.jumpHold || p.act === 'charge' || p.act === 'spike')) { /* v1.89 스파이크도 S를 누른(힘 모으기) 뒤에는 조준 칸 고정 */ if (edge & F) p.aimX = Math.min(1, p.aimX + 1); if (edge & Bk) p.aimX = Math.max(-1, p.aimX - 1); if (edge & K.U) p.aimZ = Math.max(-1, p.aimZ - 1); if (edge & K.D) p.aimZ = Math.min(1, p.aimZ + 1); }
     if (serving && p.aimOn && !((inp & K.S) || p.act === 'charge' || !p.gnd || p.srvA > 0)) { /* v2.03 서브 1단계: ←→ = 과녁 앞뒤, ↑↓ = 과녁 좌우(대각선 서브 가능) */ if (inp & F) p.aimSx += 330 * DT; if (inp & Bk) p.aimSx -= 330 * DT; if (inp & K.U) p.aimSz -= ZD * 0.85 * DT; if (inp & K.D) p.aimSz += ZD * 0.85 * DT; p.aimSx = clamp(p.aimSx, 110, 600); p.aimSz = clamp(p.aimSz, ZD * 0.08, ZD * 0.92); }
-    if (spkAim) { if (!p.spkOn) { p.spkOn = true; [p.spkSx, p.spkSz] = spkStart(p, inp); } if (inp & F) p.spkSx += 420 * DT; if (inp & Bk) p.spkSx -= 420 * DT; if (inp & K.U) p.spkSz -= ZD * 1.05 * DT; if (inp & K.D) p.spkSz += ZD * 1.05 * DT; p.spkSx = clamp(p.spkSx, 80, 600); p.spkSz = clamp(p.spkSz, ZD * 0.06, ZD * 0.94); } // v1.94 스파이크 과녁
+    if (spkAim) { if (!p.spkOn) { p.spkOn = true; [p.spkSx, p.spkSz] = S.chal && S.chal.k === 'spike' && S.chal.pre ? [S.chal.pre.sx, S.chal.pre.sz] : spkStart(p, inp); } if (inp & F) p.spkSx += 420 * DT; if (inp & Bk) p.spkSx -= 420 * DT; if (inp & K.U) p.spkSz -= ZD * 1.05 * DT; if (inp & K.D) p.spkSz += ZD * 1.05 * DT; p.spkSx = clamp(p.spkSx, 80, 600); p.spkSz = clamp(p.spkSz, ZD * 0.06, ZD * 0.94); } // v1.94 스파이크 과녁
   } else p.aimOn = false;
   { const b = S.ball; // v0.42 3단 콤보 찬스(v0.44: 리시브·토스 둘 다 나이스일 때만): 리시브→토스 공을 사람이 점프해서 노리면 1/3 속도로 약 1.5초(치는 순간·착지하면 끝)
     if (!p.bot && S.phase === 'rally' && !p.gnd && !S.slowCmb && S.slowSer !== b.serial && !b.held && !b.cap && !b.sup && b.lastTeam === p.team && b.chain >= 2 && b.nice >= 2 && (p.act === 'charge' || p.jumpHold) && sideOf(b.x) === p.team && Math.abs(b.x - p.x) < 320 * XS && !S.tut) {
@@ -1366,8 +1374,8 @@ function step(S) {
   for (const p of S.players) stepPlayer(S, p);
   if (S.chal && S.chal.k === 'recv') chalRecvStep(S);
   if (S.chal && S.chal.tgt && (S.chal.k === 'serve' || S.chal.k === 'spike') && !S.chal.frz) { // v2.04 과녁 크기는 고정(시간이 가도 안 작아짐). 지옥 서브만 과녁이 천천히 오르내림(치는 순간 고정)
-    const C2 = S.chal, me = chalMe(S); if (C2.k === 'serve' ? S.phase !== 'serve' : S.ball.lastP === me.i) C2.frz = true; else { C2.el += DT; if (C2.k === 'serve' && chalD(S).smove && C2.tz0 != null) C2.tgt.z = clamp(C2.tz0 + Math.sin(C2.el * 1.6) * ZD * 0.16, ZD * 0.1, ZD * 0.9); } }
-  if (S.chal && S.chal.hser !== S.ball.serial && !S.ball.held) { const b = S.ball; S.chal.hser = b.serial; S.chal.hv = Math.hypot(b.vx, b.vz) + Math.max(0, b.vy) * 0.6; } // v1.81 친 직후 공 세기(과녁 점수용)
+    const C2 = S.chal, me = chalMe(S); if (C2.k === 'serve' ? S.phase !== 'serve' : S.ball.lastP === me.i) C2.frz = true; else { C2.el += DT; if (C2.k === 'serve' && chalD(S).smove && C2.tz0 != null) C2.tgt.z = clamp(C2.tz0 + Math.sin(C2.el * 1.6) * ZD * 0.16 * chalD(S).smove, ZD * 0.1, ZD * 0.9); /* v2.07 smove = 움직이는 폭(1 = 예전) */ } }
+  if (S.chal && S.chal.hser !== S.ball.serial && !S.ball.held) { const b = S.ball; S.chal.hser = b.serial; S.chal.hv = Math.hypot(b.vx, b.vz) + Math.max(0, b.vy) * 0.6; const lp = S.players[b.lastP]; S.chal.sk = lp && b.lastKind === 'spike' ? clamp(((lp.pw || 0.76) - 0.76) / 0.52, 0, 1) : 0; /* v2.05 스파이크 파워(모은 정도) */ } // v1.81 친 직후 공 세기(과녁 점수용)
   if (S.chal && S.chal.k === 'rally' && S.phase === 'rally') { const sd = sideOf(S.ball.x); if (S.chal.side >= 0 && sd !== S.chal.side) S.chal.cur++; S.chal.side = sd; } // 랠리 횟수(네트를 넘을 때마다)
   for (let i = 0; i < S.players.length; i++) for (let j = i + 1; j < S.players.length; j++) { // v0.55 같은 편끼리 겹치지 않게 살짝 밀어낸다
     const a = S.players[i], q = S.players[j]; if (a.team !== q.team || !a.gnd || !q.gnd || a.act === 'dive' || q.act === 'dive') continue;
@@ -1418,7 +1426,7 @@ function step(S) {
           b.y = GY - BR;
           if ((b.out || S.env.windy) && (b.x < 0 || b.x > CW) && !(S.netLive && S.netLive.mode && !S.netLive.done)) { // v0.51 아웃은 실제로 떨어진 자리로 판정(바람에 밀려 들어오면 인, 밀려 나가면 아웃)
             const R = S.ref, od = b.x < 0 ? -b.x : b.x - CW, lt = b.lastTeam;
-            if (R && R.n > 0 && R.team === 1 - lt && od < 90 * XS) { // v0.95 심판 뒤끝: 원한 있는 팀에 불리하게 '인'
+            if (R && R.n > 0 && !S.chal && R.team === 1 - lt && od < 90 * XS) { // v0.95 심판 뒤끝(v2.05 도전과제에서는 없음): 원한 있는 팀에 불리하게 '인'
               ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '인!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX + 62 * XS, GY - 410, -40, '흥!', 3);
               point(S, lt, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; break;
             }
@@ -1428,7 +1436,7 @@ function step(S) {
             break;
           }
           const NL = S.netLive && S.netLive.mode && !S.netLive.done ? S.netLive : null, side = NL ? (b.x < NETX + NL.dx ? 0 : 1) : sideOf(b.x), scorer = NL ? (side !== NL.team ? NL.by : -1) : b.lastTeam === 1 - side ? b.lastP : -1; if (NL) { NL.done = true; ev(S, 'txt', NETX + NL.dx, NETTOP - 130, ZD / 2, '네트 대이동 득점!!', 1, 1); }
-          { const R = S.ref; if (!NL && R && R.n > 0 && b.lastTeam === R.team && side !== R.team && Math.min(b.x, CW - b.x) < NETX * 0.45 && Math.random() < 0.6) { // v0.95 심판 뒤끝: 원한 있는 팀이 끝선 가까이 넣은 공은 '아웃'
+          { const R = S.ref; if (!NL && R && R.n > 0 && !S.chal && b.lastTeam === R.team && side !== R.team && Math.min(b.x, CW - b.x) < NETX * 0.45 && Math.random() < 0.6) { // v0.95 심판 뒤끝: 원한 있는 팀이 끝선 가까이 넣은 공은 '아웃'
             ev(S, 'ground', b.x, GY, b.z, 0, 0); ev(S, 'txt', clamp(b.x, 200, CW - 200), 260, b.z, '아웃!? (심판 뒤끝)', 3, 1); ev(S, 'txt', NETX + 62 * XS, GY - 410, -40, '흥!', 3);
             point(S, 1 - R.team, -1); b.vy = -Math.abs(b.vy) * 0.5; b.vx *= 0.6; b.vz *= 0.6; b.home = 0; break; } }
           ev(S, 'ground', b.x, GY, b.z, b.sup || 0, b.power || b.sup ? 1 : 0); if (b.power || b.sup) S.stopT = 0.07;
@@ -1479,21 +1487,23 @@ function chalMe(S) { return S.players.find(q => !q.bot) || S.players[0]; }
 function chalServe(S) { // 서브 시작 때 도전 모드 준비
   const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball; C2.side = -1;
   for (const q of S.players) { q.gone = C2.k !== 'rally' && q.team !== T; q.chalSpk = false; }
-  C2.tr = C2.tr0 = C2.k === 'spike' ? chalD(S).sr : chalD(S).r; C2.el = 0; C2.frz = false; C2.tz0 = null; C2.wait = 0; C2.dm = chalM(S); C2.dn = (DIFFS[S.diff] || DIFFS.normal).name + '·' + (CTRLS[S.ctrl] || CTRLS.normal).name;
+  C2.tr = C2.tr0 = C2.k === 'spike' ? chalD(S).sr : chalD(S).r; C2.el = 0; C2.frz = false; C2.tz0 = null; C2.wait = 0; C2.dm = chalM(S); C2.dn = (DIFFS[S.diff] || DIFFS.normal).name + '·' + (CTRLS[humanCtrl(S)] || CTRLS.normal).name;
   if (C2.k === 'spike') C2.tgt = chalD(S).sfix ? { x: oppD(T, rnd(300, 420)), z: ZD * rnd(0.3, 0.7) } : cornerTgt(T, 130, 230, 430, 560); // v1.81 스파이크도 과녁(구석) · v2.04 쉬움은 가운데 근처
   if (C2.k === 'recv') chalRecvSet(S, me);
   if (C2.k === 'serve') { C2.tgt = chalD(S).sfix ? { x: oppD(T, 380), z: ZD / 2 } : cornerTgt(T, 160, 260, 450, 560); C2.tz0 = C2.tgt.z; } // v1.81 구석으로 · v2.04 쉬움은 내 정면 가운데 고정
   if (C2.k === 'spike') { S.phase = 'rally'; S.phaseT = 0; me.x = netD(T, 260); me.z = ZD / 2;
-    if (chalD(S).atoss) { C2.wait = 1; b.held = true; b.vx = b.vy = b.vz = 0; b.x = netD(T, 620); b.y = GY - 160; b.z = ZD / 2; b.lastTeam = T; b.lastP = -1; ev(S, 'txt', b.x, b.y - 60, b.z, 'A를 누르면 토스!', 0); } // v2.04 쉬움·보통: 준비되면 A
+    C2.pre = null; if (chalD(S).atoss) { C2.wait = 1; C2.pre = { sx: 350, sz: ZD / 2 }; /* v2.05 토스 전에 방향키로 과녁을 미리 조준 */ b.held = true; b.vx = b.vy = b.vz = 0; b.x = netD(T, 500); b.y = GY - 160; b.z = ZD / 2; b.lastTeam = T; b.lastP = -1; } // v2.04 쉬움·보통: 준비되면 A(안내는 화면이 공 위에 계속 그림)
     else chalToss(S); }
 }
-function chalToss(S) { const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball; C2.wait = 0; // 스파이크 도전: 토스 올리기
+function chalToss(S) { const C2 = S.chal, me = chalMe(S), T = me.team, b = S.ball, x0 = C2.wait ? 500 : 620; C2.wait = 0; // 스파이크 도전: 토스 올리기(기다리던 공은 보이는 자리에서 그대로 출발)
   b.held = false; b.lastTeam = T; b.lastP = -1; b.noP = -1; b.touches = 1; b.chain = 1; S.rallyHits = 1; b.serial++; b.teamCd = 0;
-  b.x = netD(T, 620); b.y = GY - 160; b.z = ZD / 2 + rnd(-60, 60) / chalD(S).toss; lob(S, b, netD(T, rnd(70, 130)), b.z, GY - 300, GY - 300 - 260 * chalD(S).toss); /* v1.85 어려울수록 토스가 낮고 빠름 */ ev(S, 'txt', b.x, b.y - 60, b.z, '토스!', 0); }
-function chalSpikeWait(S) { const me = chalMe(S), b = S.ball, a = me.inp & K.A; b.x = netD(me.team, 620); b.y = GY - 160 + Math.sin(S.time * 4) * 6; b.vx = b.vy = b.vz = 0; if (a && !me.prevA) chalToss(S); me.prevA = a; me.inp &= ~K.A; }
+  b.x = netD(T, x0); b.y = GY - 160; b.z = ZD / 2 + rnd(-60, 60) / chalD(S).toss; lob(S, b, netD(T, rnd(70, 130)), b.z, GY - 300, GY - 300 - 260 * chalD(S).toss); /* v1.85 어려울수록 토스가 낮고 빠름 */ ev(S, 'txt', b.x, b.y - 60, b.z, '토스!', 0); }
+function chalSpikeWait(S) { const me = chalMe(S), b = S.ball, C2 = S.chal, i = me.inp, a = i & K.A, F = fdir(me) > 0 ? K.R : K.L, Bk = F === K.R ? K.L : K.R, P = C2.pre; b.x = netD(me.team, 500); b.y = GY - 160 + Math.sin(S.time * 4) * 6; b.vx = b.vy = b.vz = 0;
+  if (P) { if (i & F) P.sx += 380 * DT; if (i & Bk) P.sx -= 380 * DT; if (i & K.U) P.sz -= ZD * 0.95 * DT; if (i & K.D) P.sz += ZD * 0.95 * DT; P.sx = clamp(P.sx, 80, 600); P.sz = clamp(P.sz, ZD * 0.06, ZD * 0.94); } // 기다리는 동안 방향키 = 과녁(캐릭터는 제자리)
+  if (a && !me.prevA) chalToss(S); me.prevA = a; me.inp &= ~(K.A | K.L | K.R | K.U | K.D); }
 function chalPoint(S, team, scorer) { // 도전 모드에서는 점수 대신 기록을 센다
   const C2 = S.chal, me = chalMe(S), b = S.ball, ok = team === me.team; let end = false;
-  if (C2.k === 'serve' || C2.k === 'spike') { const isS = C2.k === 'spike', pts = ok && (!isS || b.lastKind === 'spike') ? tgtPts(b, C2.tgt, chalD(S).pow ? C2.hv : 1350, C2.tr) : 0; /* v2.04 쉬움·보통은 정확도만(세기 무관), 어려움·지옥은 정확도×세기 */ // v1.81 과녁 점수(가운데 10점 ~ 바깥 0점)
+  if (C2.k === 'serve' || C2.k === 'spike') { const isS = C2.k === 'spike', pk0 = chalD(S).pk0 == null ? 0.4 : chalD(S).pk0, pk = !chalD(S).pow ? 1 : isS ? pk0 + (1 - pk0) * (C2.sk || 0) : C2.sp >= 0 ? 0.4 + 0.6 * C2.sp : 0.3, pts = ok && (!isS || b.lastKind === 'spike') ? Math.round(tgtPts(b, C2.tgt, 1350, C2.tr) * pk) : 0; /* v2.05 세기 점수: 스파이크는 모은 파워, 서브는 게이지 기준으로 40%~100%(언더·플로터 서브 30%) — 전에는 공 속도 기준이라 아무리 세게 쳐도 절반도 못 받았음 */ /* v2.04 쉬움·보통은 정확도만(세기 무관), 어려움·지옥은 정확도×세기 */ // v1.81 과녁 점수(가운데 10점 ~ 바깥 0점)
     const dp = chalAdd(S, pts); C2.n++; ev(S, 'txt', b.x, 220, b.z, pts ? '+' + dp + (pts >= 9 ? ' 완벽!' : '') : isS && ok && b.lastKind !== 'spike' ? '스파이크로 때려야 점수!' : ok && chalD(S).pow && tgtPts(b, C2.tgt, 1350, C2.tr) > 0 ? '더 세게!' : '빗나감', pts ? 1 : 3, 1); if (C2.n >= 10) end = true; }
   else if (C2.k === 'recv') { if (!C2.got) { C2.n++; ev(S, 'txt', NETX, 230, ZD / 2, '놓쳤다… 0점', 3, 1); } C2.got = 0; if (C2.n >= 10) end = true; }
   else { C2.n++; const bd = C2.cur >= 30 ? chalAdd(S, 10) : 0; ev(S, 'txt', NETX, 230, ZD / 2, (C2.cur >= 30 ? '30회 돌파!! +' + bd + ' · ' : '랠리 ' + C2.cur + '회 · ') + '점수 ' + C2.sc, C2.cur >= 30 ? 1 : 3, 1); if (C2.n >= 3) end = true; C2.cur = 0; }
@@ -1503,13 +1513,14 @@ function chalPoint(S, team, scorer) { // 도전 모드에서는 점수 대신 �
 }
 const CHAL_D = { // v2.04 도전 난이도 다시 설계(테스터 의견): m 점수 배율, r 서브 과녁 크기(모두 같음), sfix 서브·스파이크 과녁 가운데 고정, smove 서브 과녁이 움직임, noArc 서브 궤적 숨김, pow 세기도 점수에 반영, sr 스파이크 과녁 크기, atoss A로 토스, rs 리시브 스파이크 세기, rpos 상대 스파이크 자리(back 코트 뒤·net 네트 앞·any 아무 데), raim 노리는 곳(me 내 주변·rand 아무 데), rc 구석 확률, feint 페인트, toss 스파이크 토스 높이
   easy: { m: 0.6, r: 1.15, sfix: 1, smove: 0, noArc: 0, pow: 0, sr: 1.35, atoss: 1, rs: 880, rpos: 'back', raim: 'me', rc: 0, feint: 0, toss: 1.15 },
-  normal: { m: 1, r: 1.15, sfix: 0, smove: 0, noArc: 0, pow: 0, sr: 1, atoss: 1, rs: 1080, rpos: 'back', raim: 'rand', rc: 0.4, feint: 0, toss: 1 },
-  hard: { m: 1.4, r: 1.15, sfix: 0, smove: 0, noArc: 1, pow: 1, sr: 1, atoss: 0, rs: 1300, rpos: 'net', raim: 'me', rc: 0, feint: 0.1, toss: 0.9 },
-  hell: { m: 1.8, r: 1.15, sfix: 0, smove: 1, noArc: 1, pow: 1, sr: 0.7, atoss: 0, rs: 1480, rpos: 'any', raim: 'rand', rc: 0.7, feint: 0.2, toss: 0.8 } };
+  normal: { m: 1, r: 0.75, sfix: 0, smove: 0, noArc: 0, pow: 0, sr: 1, atoss: 1, rs: 1080, rpos: 'back', raim: 'rand', rc: 0.25, feint: 0, toss: 1 },
+  hard: { m: 1.4, r: 0.55, sfix: 0, smove: 0, noArc: 1, pow: 1, pk0: 0.7, sr: 1, atoss: 1, rs: 1380, rpos: 'net', raim: 'me', rw: 2.2, rc: 0, feint: 0.1, toss: 0.9 },
+  hell: { m: 1.8, r: 0.55, sfix: 0, smove: 0.3, /* v2.07 과녁 크기를 어려움과 같게(1.15→0.55), 대신 움직이는 폭을 30%로 */ noArc: 1, pow: 1, sr: 1, atoss: 0, rs: 1640 /* v2.08 지옥 리시브 공 세기 1560→1640(받기 성공 66%→57%) */, rpos: 'any', raim: 'rand', rc: 0.7, feint: 0.2, toss: 0.9 } };
+/* v2.06 봇으로 재서 맞춤(10점 만점): 서브 보통 8.9→7.5(과녁 1.15→0.75)·어려움 7.8→5.5(과녁 0.55) / 스파이크 어려움 3.6→5.9(A 토스+미리 조준, 세기 비중 60%→30%: pk0 0.7)·지옥 2.9→3.4(과녁 0.7→1, 토스 0.8→0.9 = 전 어려움 수준) */
 const CHAL_R = { easy: { spk: 0, back: 0, blk: 0, dir: 0 }, normal: { spk: 1, back: 1, blk: 0, dir: 0 }, hard: { spk: 1, back: 1, blk: 1, dir: 1 }, hell: { spk: 1, back: 0, blk: 1, dir: 1 } }; // v2.04 랠리 상대: spk 스파이크, back 코트 뒤에서만 스파이크, blk 블로킹, dir 두 번째 공격(다이렉트) // v1.85 도전 난이도: m 점수 배율, r 과녁 크기, rs 리시브 스파이크 세기, rc 구석 확률, feint 페인트 확률, toss 스파이크 토스 높이
 function chalD(S) { return CHAL_D[S.diff] || CHAL_D.normal; }
 const CHAL_C = { easy: 0.6, normal: 1, pro: 1.5 }; // v1.87 조작 난이도 배율: 쉬움 < 보통 < 수동
-function chalM(S) { return chalD(S).m * (CHAL_C[S.ctrl] || 1); } // 점수 배율 = 난이도 × 조작
+function chalM(S) { return chalD(S).m * (CHAL_C[humanCtrl(S)] || 1); } // 점수 배율 = 난이도 × 조작
 function chalAdd(S, raw) { const C2 = S.chal, b4 = C2.sc; C2.raw = (C2.raw || 0) + raw; C2.sc = Math.round(C2.raw * chalM(S)); C2.best = C2.sc; return C2.sc - b4; } // 기본 점수 × 난이도 배율
 function tgtPts(b, g, hv, tr) { if (!g) return 0; const d = Math.hypot((b.x - g.x) / XS, (b.z - g.z) * 1.6) / (tr || 1), acc = d <= 15 ? 1 : Math.max(0, 1 - (d - 15) / 120), pow = clamp(((hv || 0) - 650) / 700, 0, 1); return Math.round(10 * acc * pow); } // v1.81 과녁 점수 = 정확도(가운데 1 ~ 135 밖 0) × 세기(살짝 친 공 0 ~ 풀파워 1), 최대 10점
 function cornerTgt(T, x0, x1, x2, x3) { return { x: oppD(T, Math.random() < 0.5 ? rnd(x0, x1) : rnd(x2, x3)), z: ZD * (Math.random() < 0.5 ? rnd(0.1, 0.25) : rnd(0.75, 0.9)) }; } // v1.81 과녁은 구석으로
@@ -1539,7 +1550,7 @@ function chalRecvStep(S) { // 상대 스파이커: 공이 내려오면 뛰어서
   ev(S, 'spike', b.x, b.y, b.z, 0, -1); ev(S, 'hit', b.x, b.y, b.z, 3, -1); S.stopT = 0.06;
 }
 function chalRecvAim(S, me, T) { const CD = chalD(S); // v2.04 노릴 곳: 쉬움·어려움은 내 주변, 보통·지옥은 아무 데(구석 확률 rc)
-  if (CD.raim === 'me') { const d0 = Math.abs(me.x - NETX) / XS; return { x: netD(T, clamp(d0 + rnd(-90, 90), 80, 560)), z: clamp(me.z + rnd(-0.14, 0.14) * ZD, 30, ZD - 30) }; }
+  if (CD.raim === 'me') { const d0 = Math.abs(me.x - NETX) / XS; const w = CD.rw || 1; /* v2.05 어려움은 '내 주변'이 더 넓음(몇 걸음 움직여야 함) */ return { x: netD(T, clamp(d0 + rnd(-90, 90) * w, 80, 560)), z: clamp(me.z + rnd(-0.14, 0.14) * ZD * w, 30, ZD - 30) }; }
   const cr = Math.random() < CD.rc, tx = cr ? (Math.random() < 0.5 ? rnd(70, 160) : rnd(470, 570)) : rnd(120, 520), tz = cr ? (Math.random() < 0.5 ? rnd(30, ZD * 0.22) : rnd(ZD * 0.78, ZD - 30)) : rnd(40, ZD - 40); return { x: netD(T, tx), z: tz }; }
 function chalRecvHit(S, p, perfect, err, stag) { // 리시브 점수: 나이스 타이밍(빨리 누를수록) 7~10점, 보통 5, 겨우 3, 휘청 1, 아웃 0
   const C2 = S.chal, b = S.ball; if (C2.got) return;
@@ -1810,5 +1821,5 @@ function bossParry(S, p) { // 10 카운터: 번쩍일 때 막으면 보스 코�
   B.cwSer = -1; B.groggy = Math.max(B.groggy, 2.5); bossSt(B, 'flinch'); ev(S, 'bossParry', b.x, b.y, b.z, p.i); ev(S, 'txt', p.x, p.y - 200, p.z, '카운터!!', 1, 1); S.stopT = 0.2;
 }
 
-const Core = { spkStart, BOSSES, bossPads, CHAL, ROLES, roleOf, askDouble, predMove, rollDope, dopeLabel, chOf, DOPE_T, SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
+const Core = { CHAL_D, humanCtrl, spkStart, BOSSES, bossPads, CHAL, ROLES, roleOf, askDouble, predMove, rollDope, dopeLabel, chOf, DOPE_T, SCAT, CATN, BEATS, shotPreview, spikeAim, drill, forceSup, noTouch, CTRLS, COURTS, useCourt, court: () => ({ CW, NETX, ZD, XS, VW }), W, H, GY, NETH, NETW, BR, NETTOP, DT, K, CHARS, STAGES, ITEMS, DIFFS, HOMES, newGame, step, predict, psc, fdir, busy, jumpH, netD, oppD, sideOf, clamp, rnd, heat };
 if (typeof module !== 'undefined') module.exports = Core;
