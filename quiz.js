@@ -46,7 +46,7 @@ function closeQ(r) {
   const cur = run.R.cur, res = QRUN.close(run.R); bcast(r, Object.assign({ t: 'qr' }, res));
   run.jamUsed = new Set();
   const nextStage = QRUN.stageOf(cur.n + 1) > cur.stage;
-  later(r, res.over ? 2600 : 2300 + (nextStage ? 2200 : 0) + (res.newOut.length ? 800 : 0), () => res.over ? finish(r) : ask(r));
+  later(r, res.over ? 2600 : 3000 /* v1.53 다음 문제까지 텀(전 2300) */ + (nextStage ? 2400 : 0) + (res.newOut.length ? 800 : 0), () => res.over ? finish(r) : ask(r));
 }
 function finish(r) { const run = r.run; if (!run) return; bcast(r, { t: 'end', rank: QRUN.ranking(run.R) }); stopRun(r); r.run = null; r.ready = r.ready.map(() => false); pushInfo(r); }
 function onMsg(ws, m) {
