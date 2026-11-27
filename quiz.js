@@ -38,7 +38,7 @@ function ask(r) { // 다음 문제
   const run = r.run, q = QRUN.next(run.R);
   if (!q) return finish(r);
   run.qAt = Date.now(); bcast(r, Object.assign({ t: 'q' }, q));
-  later(r, q.special ? 26000 : 14000, () => closeQ(r)); // 시간이 다 되면 마감(안 낸 사람은 실패)
+  later(r, q.special ? 26000 : 16000, () => closeQ(r)); // v1.48 제한시간 +1.5초 반영(14→16초) // 시간이 다 되면 마감(안 낸 사람은 실패)
 }
 function checkClose(r) { const run = r.run; if (!run || !run.R.cur) return; if (!QRUN.waiting(run.R).length) later(r, 300, () => closeQ(r)); }
 function closeQ(r) {
