@@ -37,10 +37,10 @@ function later(r, ms, fn) { const run = r.run; if (!run) return; if (run.timer) 
 function ask(r) { // 다음 문제
   const run = r.run, q = QRUN.next(run.R);
   if (!q) return finish(r);
-  run.qAt = Date.now(); bcast(r, Object.assign({ t: 'q' }, q));
+  run.qAt = Date.now(); run.allIn = false; run.dl = run.qAt + (q.special ? 26000 : 16000); bcast(r, Object.assign({ t: 'q' }, q));
   later(r, q.special ? 26000 : 16000, () => closeQ(r)); // v1.48 제한시간 +1.5초 반영(14→16초) // 시간이 다 되면 마감(안 낸 사람은 실패)
 }
-function checkClose(r) { const run = r.run; if (!run || !run.R.cur) return; if (!QRUN.waiting(run.R).length) later(r, 300, () => closeQ(r)); }
+function checkClose(r) { const run = r.run; if (!run || !run.R.cur) return; if (!QRUN.waiting(run.R).length) { run.allIn = true; later(r, 300, () => closeQ(r)); } }
 function closeQ(r) {
   const run = r.run; if (!run || !run.R.cur) return;
   const cur = run.R.cur, res = QRUN.close(run.R); bcast(r, Object.assign({ t: 'qr' }, res));
@@ -108,6 +108,10 @@ function onMsg(ws, m) {
   }
   // ── 시험 중 ──
   const run = r.run, p = run.pl.indexOf(ws);
+  if (t === 'st') { // v1.49 이 사람이 실제로 문제를 시작함(그림 불러오기·설명이 늦은 폰): 마감을 그 사람의 제한시간 뒤로 늦춤(문제 시작부터 최대 40초)
+    if (p < 0 || !run.R.cur || (m.n | 0) !== run.R.cur.n || run.allIn) return;
+    const T = Math.min(20, Math.max(0, +m.T || 0)), nd = Math.min(run.qAt + 40000, Date.now() + T * 1000 + 2000);
+    if (nd > run.dl) { run.dl = nd; later(r, nd - Date.now(), () => closeQ(r)); } return; }
   if (t === 'res') { if (p < 0 || !run.R.cur || (m.n | 0) !== run.R.cur.n) return; QRUN.submit(run.R, p, m); bcast(r, { t: 'did', p, ok: !!m.ok }); checkClose(r); return; }
   if (t === 'jam') { if (p < 0 || !run.R.out[p] || run.jamUsed.has(p) || !CARDS.includes(m.card)) return; const al = QRUN.alive(run.R); if (!al.length) return;
     run.jamUsed.add(p); const to = al[Math.floor(Math.random() * al.length)]; bcast(r, { t: 'jam', from: p, to, card: m.card }); return; }
