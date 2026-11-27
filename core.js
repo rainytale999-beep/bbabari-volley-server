@@ -809,8 +809,7 @@ function trySuper(S, p) {
 /* ---------- 서브 ---------- */
 const SRV_LIMIT = 9, SRV_OSC = 0.9; // v1.94 서브 제한 시간, 세기 게이지 한 번 오르는 시간
 function srvKind(g) { return g < 0.34 ? 0 : g < 0.67 ? 1 : 2; } // 0 언더, 1 플로터, 2 점프 강서브
-function srvRelease(S, p, inp) { const g = p.chg || 0, k = srvKind(g); p.act = 'idle'; p.chg = 0;
-  if (k === 2) { p.act = 'charge'; doServe(S, p, true, inp, 0.5 + (g - 0.67) / 0.33 * 0.5); } else doServe(S, p, false, inp, 0, k === 1); }
+function srvRelease(S, p, inp) { const g = p.chg || 0; p.act = 'charge'; p.chg = 0; doServe(S, p, true, inp, clamp(g, 0, 1)); } // v2.03 S 게이지는 세기만(언더·플로터는 A 톡·A 꾹)
 function doServe(S, p, power, inp, chg, flt) {
   const b = S.ball, c = chOf(p), d = aimKeys(p, inp), T = p.team, f = fdir(p);
   b.held = false; b.lastTeam = T; b.lastP = p.i; b.noP = p.i; b.touches = 0; b.serial++; b.teamCd = 0.3; p.hitCd = 0.4; b.out = false; b.srv = true; b.ceilFault = false; tire(p, power ? 2 : 0.5);
@@ -845,7 +844,7 @@ function predMove(S, p, inp, edge) {
   const c = chOf(p), s = p.st, inc = busy(p), ice = S.ice[p.team] > 0, ck = ctl(S, p), b = S.ball, serving = S.phase === 'serve' && S.server === p.i;
   let mx = 0, mz = 0;
   if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
-  if (serving) { mx = 0; if (p.act === 'charge') mz = 0; } // v1.94 stepPlayer 와 같음
+  if (serving) { mx = 0; mz = 0; } // v2.03 stepPlayer 와 같음
   const spkAim = !serving && !p.gnd && p.act === 'charge' && !inc;
   const aimAir = ck.assist > 0 && !p.gnd && (p.act === 'spike' || p.act === 'charge' || (p.jumpHold && p.act === 'idle')) && !serving && !inc;
   if (spkAim) { mx = 0; mz = 0; } // v1.95 힘 모으는 동안 방향키는 과녁만
@@ -950,7 +949,7 @@ function stepPlayer(S, p) {
   const spd = pSpeed(S, p) * (p.act === 'charge' && p.gnd ? 0.6 : 1) * (toSrv ? 1.7 : 1), ice = S.ice[p.team] > 0;
   if (reset) { const h = home(S, p); mx = Math.abs(h[0] - p.x) < 10 ? 0 : (h[0] > p.x ? 1 : -1); mz = Math.abs(h[1] - p.z) < 10 ? 0 : (h[1] > p.z ? 1 : -1); inp = 0; }
   else if (!inc && p.act !== 'dive') { mx = ((inp & K.R) ? 1 : 0) - ((inp & K.L) ? 1 : 0); mz = ((inp & K.D) ? 1 : 0) - ((inp & K.U) ? 1 : 0); }
-  if (serving && !reset) { mx = 0; if (p.act === 'charge') mz = 0; } // v1.94 서브: 캐릭터는 끝선을 따라 ↑↓만(←→는 과녁만), 세기 정하는 동안은 멈춤
+  if (serving && !reset) { mx = 0; mz = 0; } // v2.03 서브: 캐릭터는 끝선 가운데에 서 있고, 방향키(↑↓←→)는 모두 과녁만 움직임
   const ck = ctl(S, p);
   // 스파이크 조준: S로 뛰어 힘을 모으는(또는 휘두르는) 동안에는 공을 칠 자리로 저절로 날아가고, 방향키는 때릴 곳(상대 코트)만 고른다
   const spkAim = !p.bot && !serving && !p.gnd && p.act === 'charge' && !inc; // v1.95 스파이크: 누른 채 떠 있는 동안 몸은 공 쪽으로 저절로, 방향키는 과녁만
@@ -992,12 +991,12 @@ function stepPlayer(S, p) {
     const F = fdir(p) > 0 ? K.R : K.L, Bk = F === K.R ? K.L : K.R;
     if (!p.aimOn) { p.aimOn = true; p.aimX = inp & F ? 1 : inp & Bk ? -1 : 0; p.aimZ = inp & K.U ? -1 : inp & K.D ? 1 : 0; p.aimSx = 350; p.aimSz = p.aimSz0 = p.z; }
     else if (!serving && !((inp & K.S) || p.jumpHold || p.act === 'charge' || p.act === 'spike')) { /* v1.89 스파이크도 S를 누른(힘 모으기) 뒤에는 조준 칸 고정 */ if (edge & F) p.aimX = Math.min(1, p.aimX + 1); if (edge & Bk) p.aimX = Math.max(-1, p.aimX - 1); if (edge & K.U) p.aimZ = Math.max(-1, p.aimZ - 1); if (edge & K.D) p.aimZ = Math.min(1, p.aimZ + 1); }
-    if (serving && p.aimOn && !((inp & K.S) || p.act === 'charge' || !p.gnd || p.srvA > 0)) { /* v1.94 서브 1단계: ←→ = 과녁 앞뒤, ↑↓ = 캐릭터가 끝선을 따라 이동(과녁도 같은 줄로 따라감) */ if (inp & F) p.aimSx += 330 * DT; if (inp & Bk) p.aimSx -= 330 * DT; p.aimSx = clamp(p.aimSx, 110, 600); p.aimSz = clamp(p.z, ZD * 0.08, ZD * 0.92); }
+    if (serving && p.aimOn && !((inp & K.S) || p.act === 'charge' || !p.gnd || p.srvA > 0)) { /* v2.03 서브 1단계: ←→ = 과녁 앞뒤, ↑↓ = 과녁 좌우(대각선 서브 가능) */ if (inp & F) p.aimSx += 330 * DT; if (inp & Bk) p.aimSx -= 330 * DT; if (inp & K.U) p.aimSz -= ZD * 0.85 * DT; if (inp & K.D) p.aimSz += ZD * 0.85 * DT; p.aimSx = clamp(p.aimSx, 110, 600); p.aimSz = clamp(p.aimSz, ZD * 0.08, ZD * 0.92); }
     if (spkAim) { if (!p.spkOn) { p.spkOn = true; [p.spkSx, p.spkSz] = spkStart(p, inp); } if (inp & F) p.spkSx += 420 * DT; if (inp & Bk) p.spkSx -= 420 * DT; if (inp & K.U) p.spkSz -= ZD * 1.05 * DT; if (inp & K.D) p.spkSz += ZD * 1.05 * DT; p.spkSx = clamp(p.spkSx, 80, 600); p.spkSz = clamp(p.spkSz, ZD * 0.06, ZD * 0.94); } // v1.94 스파이크 과녁
   } else p.aimOn = false;
   { const b = S.ball; // v0.42 3단 콤보 찬스(v0.44: 리시브·토스 둘 다 나이스일 때만): 리시브→토스 공을 사람이 점프해서 노리면 1/3 속도로 약 1.5초(치는 순간·착지하면 끝)
     if (!p.bot && S.phase === 'rally' && !p.gnd && !S.slowCmb && S.slowSer !== b.serial && !b.held && !b.cap && !b.sup && b.lastTeam === p.team && b.chain >= 2 && b.nice >= 2 && (p.act === 'charge' || p.jumpHold) && sideOf(b.x) === p.team && Math.abs(b.x - p.x) < 320 * XS && !S.tut) {
-      S.slowSer = b.serial; S.slowCmb = true; S.slowP = p.i; S.slowT = Math.max(S.slowT, 1.5); ev(S, 'txt', p.x, p.y - 175, p.z, '3단 콤보 찬스!', 1, 1);
+      S.slowSer = b.serial; S.slowCmb = true; S.slowP = p.i; S.slowT = Math.max(S.slowT, 1.0); /* v2.03 1.5→1.0초 */ ev(S, 'txt', p.x, p.y - 175, p.z, '3단 콤보 찬스!', 1, 1);
     }
     if (S.slowCmb && S.slowP === p.i && p.gnd) { S.slowCmb = false; S.slowT = 0; }
   }
@@ -1356,7 +1355,7 @@ function step(S) {
   if (S.freezeT > 0) { S.freezeT -= DT; if (S.cut) { S.cut.t += DT; clashScan(S); } if (S.freezeT <= 0) { const cut = S.cut; S.cut = null; if (cut) endCut(S, cut); } return; }
   if (S.stopT > 0) { S.stopT -= DT; return; }
   { const R = S.ref; if (R) { R.t += DT; if ((R.st === 2 && R.t > 1.4) || (R.st === 1 && R.t > 0.7)) { R.st = R.n > 0 ? 3 : 0; R.t = 0; } } }
-  if (S.slowT > 0) { S.slowT -= DT; if (S.slowT <= 0) S.slowCmb = false; S.slowN = (S.slowN + 1) % 3; if (S.slowN) return; }
+  if (S.slowT > 0) { S.slowT -= DT; if (S.slowT <= 0) S.slowCmb = false; S.slowN = (S.slowN + 1) % (S.slowCmb ? 2 : 3); if (S.slowN) return; } // v2.03 3단 콤보 찬스는 1/2 속도(전 1/3)
   S.tick++; S.time += DT; S.phaseT += DT;
   const b = S.ball;
   S.pred = predict(S);
