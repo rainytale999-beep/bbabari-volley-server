@@ -113,6 +113,7 @@ function onMsg(ws, m) {
     const T = Math.min(20, Math.max(0, +m.T || 0)), nd = Math.min(run.qAt + 40000, Date.now() + T * 1000 + 2000);
     if (nd > run.dl) { run.dl = nd; later(r, nd - Date.now(), () => closeQ(r)); } return; }
   if (t === 'res') { if (p < 0 || !run.R.cur || (m.n | 0) !== run.R.cur.n) return; QRUN.submit(run.R, p, m); bcast(r, { t: 'did', p, ok: !!m.ok }); checkClose(r); return; }
+  if (t === 'pg') { if (p < 0 || !run.R.cur || !run.R.cur.special || (m.n | 0) !== run.R.cur.n) return; const tn = Date.now(); if (tn - (ws.pgAt || 0) < 90) return; ws.pgAt = tn; bcast(r, { t: 'pg', p, n: run.R.cur.n, x: Math.max(0, Math.min(1, +m.x || 0)) }); return; } // v1.54 특별 문제(달리기·줄다리기) 실시간 진행 공유
   if (t === 'jam') { if (p < 0 || !run.R.out[p] || run.jamUsed.has(p) || !CARDS.includes(m.card)) return; const al = QRUN.alive(run.R); if (!al.length) return;
     run.jamUsed.add(p); const to = al[Math.floor(Math.random() * al.length)]; bcast(r, { t: 'jam', from: p, to, card: m.card }); return; }
   if (t === 'quit') { if (ws === r.host) endRun(r); return; }
