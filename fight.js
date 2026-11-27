@@ -31,7 +31,7 @@ function onMsg(ws, m) {
     if (r.peers.length === 2 && r.ready[0] && r.ready[1] && !r.playing) {
       r.playing = true; r.ready = [false, false]; r.seq++;
       const seed = (Math.random() * 2147483647) | 0, chs = r.peers.map(p => p.ch);
-      const oneWay = (r.peers[0].rtt + r.peers[1].rtt) / 2, delay = r.peers[0].rtt > 0 && r.peers[1].rtt > 0 ? Math.max(2, Math.min(5, Math.round(oneWay / 16.7 * 0.6) + 1)) : 3; // v1.34 입력 지연을 두 사람 통신 속도에 맞춰 2~5프레임(나머지는 화면이 롤백으로 메움)
+      const oneWay = (r.peers[0].rtt + r.peers[1].rtt) / 2, delay = r.peers[0].rtt > 0 && r.peers[1].rtt > 0 ? Math.max(1, Math.min(3, Math.round(oneWay / 16.7 * 0.4) + 1)) : 2; /* v1.62 입력 지연 2~5 → 1~3프레임(반응 빠르게, 나머지는 롤백이 메움) */ // v1.34 입력 지연을 두 사람 통신 속도에 맞춰 2~5프레임(나머지는 화면이 롤백으로 메움)
       r.peers.forEach((p, k) => send(p, { t: 'start', seed, side: k, chs, game: r.seq, delay }));
     }
   }
