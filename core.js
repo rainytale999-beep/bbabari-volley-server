@@ -516,7 +516,7 @@ function hitSpike(S, p) {
   const setB = mineB && b.setBy >= 0 && b.setBy === b.lastP && b.setBy !== p.i ? b.setBy : -1; // v0.98 세터가 올려 준 공
   if (!touch(S, p, 'spike')) return;
   const chance = S.slowCmb && S.slowP === p.i; // v0.43: 찬스에서 친 공은 1.5배 빠르게
-  if (S.slowCmb) { S.slowCmb = false; S.slowT = 0; } // 치는 순간 슬로모션 끝
+  if (S.slowCmb) S.slowCmb = false; // 치는 순간 찬스 끝 (v2.16 찬스의 슬로모션은 없앰)
   let tag = null, mul = 1, bonus = 0, acc = 1;
   if (air && chain >= 2 && nice >= 1 && p.pw >= 1.12) { tag = '3단 콤보!'; mul = 1.2; bonus = 12; acc = 0.4; } // 리시브→토스→스파이크에 나이스가 끼고 힘을 모아 치면
   else if (air && chain >= 2) { tag = '연결 공격!'; mul = 1.1; bonus = 7; acc = 0.6; } // v0.38: 리시브→토스→스파이크로 이어지면 가산점
@@ -1004,9 +1004,9 @@ function stepPlayer(S, p) {
   } else p.aimOn = false;
   { const b = S.ball; // v0.42 3단 콤보 찬스(v0.44: 리시브·토스 둘 다 나이스일 때만): 리시브→토스 공을 사람이 점프해서 노리면 1/3 속도로 약 1.5초(치는 순간·착지하면 끝)
     if (!p.bot && S.phase === 'rally' && !p.gnd && !S.slowCmb && S.slowSer !== b.serial && !b.held && !b.cap && !b.sup && b.lastTeam === p.team && b.chain >= 2 && b.nice >= 2 && (p.act === 'charge' || p.jumpHold) && sideOf(b.x) === p.team && Math.abs(b.x - p.x) < 320 * XS && !S.tut) {
-      S.slowSer = b.serial; S.slowCmb = true; S.slowP = p.i; S.slowT = Math.max(S.slowT, 1.0); /* v2.03 1.5→1.0초 */ ev(S, 'txt', p.x, p.y - 175, p.z, '3단 콤보 찬스!', 1, 1);
+      S.slowSer = b.serial; S.slowCmb = true; S.slowP = p.i; /* v2.16 슬로모션 없음: 글자와 1.5배 빠른 스파이크만 남긴다 */ ev(S, 'txt', p.x, p.y - 175, p.z, '3단 콤보 찬스!', 1, 1);
     }
-    if (S.slowCmb && S.slowP === p.i && p.gnd) { S.slowCmb = false; S.slowT = 0; }
+    if (S.slowCmb && S.slowP === p.i && p.gnd) S.slowCmb = false;
   }
   const noCtl = inc || reset || s.wrap > 0 || s.puppet > 0;
   let jumped = false;
@@ -1363,7 +1363,7 @@ function step(S) {
   if (S.freezeT > 0) { S.freezeT -= DT; if (S.cut) { S.cut.t += DT; clashScan(S); } if (S.freezeT <= 0) { const cut = S.cut; S.cut = null; if (cut) endCut(S, cut); } return; }
   if (S.stopT > 0) { S.stopT -= DT; return; }
   { const R = S.ref; if (R) { R.t += DT; if ((R.st === 2 && R.t > 1.4) || (R.st === 1 && R.t > 0.7)) { R.st = R.n > 0 ? 3 : 0; R.t = 0; } } }
-  if (S.slowT > 0) { S.slowT -= DT; if (S.slowT <= 0) S.slowCmb = false; S.slowN = (S.slowN + 1) % (S.slowCmb ? 2 : 3); if (S.slowN) return; } // v2.03 3단 콤보 찬스는 1/2 속도(전 1/3)
+  if (S.slowT > 0) { S.slowT -= DT; S.slowN = (S.slowN + 1) % 3; if (S.slowN) return; } // 느린 화면(마지막 한 점·보스 쓰러짐 등)은 1/3 속도. v2.16 3단 콤보 찬스는 느려지지 않는다
   S.tick++; S.time += DT; S.phaseT += DT;
   const b = S.ball;
   S.pred = predict(S);
