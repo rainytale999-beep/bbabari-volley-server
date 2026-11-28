@@ -4,9 +4,9 @@
    실행: npm install  →  npm start   (기본 포트 8080, 환경변수 PORT 로 변경) */
 const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
-const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'), Quiz = require('./quiz.js'); // v1.46 지구정복 자격시험(/quiz) // v1.30 격투 연결 중계(배구와 따로)
+const Core = require('./core.js'), R = require('./room.js'), Fight = require('./fight.js'), Shoot = require('./shoot.js'), Quiz = require('./quiz.js'), Zombie = require('./zombie.js'); // v1.63 잠못드는 빱찌의 밤(/zombie) // v1.46 지구정복 자격시험(/quiz) // v1.30 격투 연결 중계(배구와 따로)
 
-const SERVER_VER = '1.62'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
+const SERVER_VER = '1.63'; // 첫 화면 글자에 표시(배포가 반영됐는지 확인용)
 const PORT = +process.env.PORT || 8080, ROOT = path.join(__dirname, '..');
 const MAX_ROOMS = 40, MAX_SPECS = 10, DT = Core.DT;
 const MIME = { '.woff2': 'font/woff2', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.txt': 'text/plain; charset=utf-8' };
@@ -62,9 +62,10 @@ const server = http.createServer((req, res) => {
     list.sort((a, b) => (a.state === 'lobby' ? 0 : 1) - (b.state === 'lobby' ? 0 : 1));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); return res.end(JSON.stringify(list.slice(0, 40)));
   }
+  if (u === '/zombie/rooms') return Zombie.roomsHttp(res); // v1.63 좀비 게임 방 목록
   if (u === '/quiz/rooms') return Quiz.roomsHttp(res); // v1.46 자격시험 방 목록
   if (u === '/shoot/rooms') return Shoot.roomsHttp(res); // 슈팅(빱찌 은하 대소동) 방 목록 — 배구 방 찾기에도 같이 보임
-  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('ok rooms=' + rooms.size + ' (경기 중 ' + [...rooms.values()].filter(r => r.S && !r.over).length + ') | 격투 방 ' + Fight.rooms.size + ' | 슈팅 방 ' + Shoot.rooms.size + ' | 시험 방 ' + Quiz.rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 랭킹 솔로 ' + Object.keys(RK.solo).length + '명 · 대전 ' + Object.keys(RK.duel).length + '명 · 은하 ' + Object.keys(RK.shoot).length + '명 · 시험 ' + Object.keys(RK.quiz).length + '명 · ' + rkSave + ' | 서버 v' + SERVER_VER); } // 진단용
+  if (u === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end('ok rooms=' + rooms.size + ' (경기 중 ' + [...rooms.values()].filter(r => r.S && !r.over).length + ') | 격투 방 ' + Fight.rooms.size + ' | 슈팅 방 ' + Shoot.rooms.size + ' | 시험 방 ' + Quiz.rooms.size + ' | 좀비 방 ' + Zombie.rooms.size + ' | 최근 10초: CPU ' + cpuPct.toFixed(1) + '%, 40ms 넘게 밀린 횟수 ' + stallShown + ' | 최근 2초 최대 밀림 ' + Math.round(gapMax) + 'ms | 랭킹 솔로 ' + Object.keys(RK.solo).length + '명 · 대전 ' + Object.keys(RK.duel).length + '명 · 은하 ' + Object.keys(RK.shoot).length + '명 · 시험 ' + Object.keys(RK.quiz).length + '명 · ' + rkSave + ' | 서버 v' + SERVER_VER); } // 진단용
   const hello = () => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('빱알이 배구 게임 서버 v' + SERVER_VER + ' 실행 중 (방 ' + rooms.size + '개)'); };
   if (ROOT === path.sep || /^[A-Za-z]:\\$/.test(ROOT)) { if (u === '/index.html') return hello(); res.writeHead(404); return res.end('not found'); } // 서버만 따로 올린 경우(폴더 맨 위): 파일은 제공하지 않는다
   const file = path.normalize(path.join(ROOT, u));
@@ -79,6 +80,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 2048 });
 const fwss = Fight.attach(server); // v1.30 /fight 는 격투 전용
 const swss = Shoot.attach(); // v1.37 /shoot 은 슈팅 전용
+const zwss = Zombie.attach(); // v1.63 /zombie 는 좀비 게임 전용
 const qwss = Quiz.attach(); // v1.46 /quiz 는 자격시험 전용
 server.on('upgrade', (req, socket, head) => { // 주소에 따라 배구(/ws)와 격투(/fight)로 나눈다
   const p = (req.url || '').split('?')[0];
@@ -86,6 +88,7 @@ server.on('upgrade', (req, socket, head) => { // 주소에 따라 배구(/ws)와
   else if (p === '/fight') fwss.handleUpgrade(req, socket, head, ws => fwss.emit('connection', ws, req));
   else if (p === '/shoot') swss.handleUpgrade(req, socket, head, ws => swss.emit('connection', ws, req));
   else if (p === '/quiz') qwss.handleUpgrade(req, socket, head, ws => qwss.emit('connection', ws, req));
+  else if (p === '/zombie') zwss.handleUpgrade(req, socket, head, ws => zwss.emit('connection', ws, req));
   else socket.destroy();
 });
 const rooms = new Map();
